@@ -1,2 +1,3 @@
 # Output folder content
-output/
+output/*
+!output/.gitkeep
