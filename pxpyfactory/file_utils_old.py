@@ -1,25 +1,21 @@
 import pandas as pd
+import pprint
 from pathlib import Path
-# import os
-# import pprint
 
 # _____________________________________________________________________________
-# Reads content from Excel or CSV files and returns a DataFrame
-# If the file cannot be read, it returns an empty DataFrame and prints an error message
 def file_read(filepath, sheet_name='Ark1', sep=';', header=0):
-    df = pd.DataFrame()
-    try:
-        if filepath.endswith('.xlsx'):
-            df = pd.read_excel(filepath, sheet_name=sheet_name, header=header)
-        elif filepath.endswith('.csv'):
-            df = pd.read_csv(filepath, sep=sep, header=header)
-        else:
-            raise ValueError("Unsupported file type")
-        df.columns = [column.strip().upper().replace(" ", "_") for column in df.columns]
-        return df
-    except Exception as e:
-        print(f"Error reading file {filepath}: {e}")
-        return df
+    # Determins the type of the file, and puts the content and returns a DataFrame.
+    if filepath.endswith('.xlsx'):
+        df = pd.read_excel(filepath, sheet_name=sheet_name, header=header)
+    elif filepath.endswith('.csv'):
+        df = pd.read_csv(filepath, sep=sep, header=header) #, encoding='latin1')
+    df.columns = [column.strip().upper().replace(" ", "_") for column in df.columns] # Standardize column names
+    return df
+    # try:
+    #     table_meta = file_read(f"TN_{row['tabellnummer']}_meta.csv")
+    # except Exception:
+    #     table_meta = pd.DataFrame(columns=['keyword', 'value'])
+
 # _____________________________________________________________________________
 # Create folder structure from data_products dataframe
 # Create the folder structure to put the px-files in
@@ -28,6 +24,13 @@ def update_folder_structure(df, folderpath):
     folder_dict = find_path(df)
     # read_folder_structure_from_storage(base_path)
     make_path(folder_dict, base_path)
+
+# def read_folder_structure_from_storage(base_path):
+#     for base_path in root.rglob("*"):
+#         if base_path.is_file():
+#             print(f"File: {base_path}")
+#         elif base_path.is_dir():
+#             print(f"Folder: {base_path}")
 # _____________________________________________________________________________
 # Read folder structure from data_products dataframe
 def find_path(df):
@@ -55,27 +58,21 @@ def find_path(df):
 # _____________________________________________________________________________
 def make_path(folder_dict, base_path):
     for level1, value1 in folder_dict.items():
-        alias1 = value1.get('alias', '')
         level1_path = base_path / str(level1)
-        try_write(alias1, level1_path)
+        level1_path.mkdir(parents=True, exist_ok=True)
+        # Write alias file in level 1 folder
+        alias1 = value1.get('alias', '')
+        with open(level1_path / 'no.alias', 'w', encoding='utf-8') as f:
+            f.write(str(alias1))
         subfolders = value1.get('subfolder', {})
         for level2, value2 in subfolders.items():
-            alias2 = value2.get('alias', '')
             level2_path = level1_path / str(level2)
-            try_write(alias2, level2_path)
-# _____________________________________________________________________________
-# Save the metadata to a .px file
-def try_write(alias, path):
-    try:
-        path.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
-        print(f"Error creating folder {path}: {e}")
-    try:
-        with open(path / 'no.alias', 'w', encoding='utf-8') as f:
-            f.write(str(alias))
-    except Exception as e:
-        print(f"Error writing alias file in {path}: {e}")
-
+            # level2_path = os.path.abspath(os.path.join(script_path, '..', 'output'))  # Define output path relative to script location
+            level2_path.mkdir(parents=True, exist_ok=True)
+            # Write alias file in level 2 folder
+            alias2 = value2.get('alias', '')
+            with open(level2_path / 'no.alias', 'w', encoding='utf-8') as f:
+                f.write(str(alias2))
 # _____________________________________________________________________________
 # Save the metadata to a .px file
 def write_px(list_of_lines, file_path):
@@ -85,9 +82,6 @@ def write_px(list_of_lines, file_path):
             print(line[:200])
         print('#'*80)
     else:
-        try:
-            with open(file_path, "w", encoding="utf-8") as f:
-                for line in list_of_lines:
-                    f.write(line + "\n")
-        except Exception as e:
-            print(f"Error writing PX file {file_path}: {e}")
+        with open(file_path, "w", encoding="utf-8") as f:
+            for line in list_of_lines:
+                f.write(line + "\n")

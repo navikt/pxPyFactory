@@ -3,13 +3,11 @@ import os
 from datetime import datetime
 from pxpyfactory.utils import *
 from pxpyfactory.file_utils import *
+import pprint
 
 def main():
-
     # _____________________________________________________________________________
     # Set folders and file-paths
-
-    
     script_path = os.path.dirname(os.path.abspath(__file__)) # Get path for this script location
     input_path = os.path.abspath(os.path.join(script_path, '..', 'input')) # Define input path relative to script location
     common_meta_filepath = os.path.abspath(os.path.join(input_path, 'common_meta.xlsx')) # Define path to common metadata file
@@ -23,7 +21,6 @@ def main():
     # Fetch data products for px file generation
     data_products = file_read(common_meta_filepath, sheet_name='dataprodukter') # Get the overview of all data products
     data_products = data_products.astype(str) # Force content in excel sheet to just strings for easier use
-    folder_dict   = data_products.groupby('LEVEL_1')['LEVEL_2'].unique().apply(list).to_dict()
     data_products = data_products[data_products['BUILD_NOW'].isin(['x'])] # Filter to only include tables tagged in Build now column
 
     duplicates_mask = data_products.duplicated(subset=['TABLE_REF'], keep='first') # List of dublicate table numbers
@@ -40,9 +37,9 @@ def main():
     # _____________________________________________________________________________
     # Prepare general metadata from Excel-sheets - common for all data products
     # Spesific values for each data product will be handled for each data product in separate .csv-files
-    manual_meta_desc = file_read(common_meta_filepath, sheet_name='metadata-desc') # All keywords and agreed setup
-    manual_meta      = file_read(common_meta_filepath, sheet_name='metadata') # Manual updates on values for some keywords (can be empty) 
-    metadata_base    = metadata_add(manual_meta_desc, manual_meta, 'MANUAL_VALUE') # Merge the two sources of metadata.
+    meta_default = file_read(common_meta_filepath, sheet_name='metadata-default') # All keywords and agreed setup
+    meta_manual = file_read(common_meta_filepath, sheet_name='metadata-manual') # Manual updates on values for some keywords (can be empty) 
+    metadata_base = metadata_add(meta_default, meta_manual, 'MANUAL_VALUE') # Adds the column 'manual_value' to 'meta_default'. The value is from 'meta_manual' (match on keyword)
     # _____________________________________________________________________________
     # For each row in the data_products dataframe, process the data product
     # Fetch table_ref column values as a list
@@ -55,61 +52,41 @@ def main():
         px_output_path  = os.path.abspath(os.path.join(output_path, row['LEVEL_1'], row['LEVEL_2'], ('TN_' + table_ref + '.px')))
         subject_code    = row['LEVEL_1'] + '\\' + row['LEVEL_2'] 
         subject_area    = row['LEVEL_1_(NO)'] + '\\' + row['LEVEL_2_(NO)']
-        data_column     = row['DATA'].upper()
-        # data_list     = [sub.strip().upper() for sub in row['DATA'].split(',')]
+        data_list       = [sub.strip().upper() for sub in row['DATA'].split(',')]
         stub_list       = [sub.strip().upper() for sub in row['STUB'].split(',')]
         units_var       = row['UNITS']
         contents_var    = row['CONTENTS']
 
         print(f"--- Start processing data product / table: {table_ref} {table_name}")
+        print(f"data_list: {data_list}")
 
         table_data = file_read(table_path, sep=',') # Fetch data table from .parquet or .csv file
-        # table_data.columns = [col.upper() for col in table_data.columns] # Standardize column names to uppercase
+
+        # Ensure all non-data columns are strings
         for column in table_data.columns:
-            # column = column.upper()
-            if column != data_column:
-            # if column not in data_list:
+            if column not in data_list:
                 table_data[column] = table_data[column].apply(lambda x: str(x) if pd.notnull(x) else x)
 
         column_list = list(table_data.columns) # Fetch column list from data table
-        column_list.remove(data_column)
-        heading_list = [column for column in column_list if column not in stub_list] # ? use instead: [sub.strip().upper() for sub in row['Delvariabler'].split(',')]
-        
+        for data_col in data_list:
+            column_list.remove(data_col) # Remove data column from the list of columns to process
+        heading_list = [column for column in column_list if column not in stub_list] # Headings are all columns not in stub_list
+
+        # Create a dictionary with unique values for each column in the data table
         values_dict = {}
         for column in column_list:
-            # unique_values = list(set(table_data[column]))
-            # values_dict[column] = [str(x) for x in unique_values]
             values_dict[column] = list(set(table_data[column]))
+        # pprint.pp(values_dict)
 
-        # Calculate dimentions of the data matrix
-        y_dim = 1
-        x_dim = 1
-        for key in values_dict.keys():
-        # for key in dict.keys(values_dict):
-            if key in stub_list:
-                x_dim *= len(values_dict[key])
-            if key in heading_list:
-                y_dim *= len(values_dict[key])
+        # Calculate data matrix dimensions and reshape data to fit PX format
+        data_out = prepare_data_matrix(values_dict, stub_list, heading_list, data_list, table_data)
 
-        # Get all unique values for each stub and heading column
-        stub_values = [values_dict[stub] for stub in stub_list]
-        heading_values = [values_dict[heading] for heading in heading_list]
-
-        # Create a MultiIndex of all possible combinations
-        all_combinations = pd.MultiIndex.from_product(stub_values + heading_values, names=stub_list + heading_list)
-
-        # Set index to stub + heading columns, reindex to include all combinations, and sort index
-        table_indexed = table_data.set_index(stub_list + heading_list).reindex(all_combinations).sort_index()
-        
-        # Fill NaN with 0 or any other placeholder if needed, and Reshape to 2D array
-        data_array = table_indexed[data_column].fillna(0).to_numpy()
-        data_out = pd.DataFrame(data_array.reshape(x_dim, y_dim), dtype=float)
-
-        try:
-            table_meta = file_read(table_meta_path)
-        except Exception:
+        # Adds the column 'spesific_value' to 'metadata'. The value is from 'table_meta' (match on keyword)
+        # This is spesific metadata for this data product - stored in a separate .csv-file
+        table_meta = file_read(table_meta_path)
+        if table_meta.empty: # If the spesific metadata file is missing or empty, create an empty dataframe
             table_meta = pd.DataFrame(columns=['KEYWORD', 'VALUE'])
-        metadata = metadata_add(metadata_base.copy(), table_meta, 'SPESIFIC_VALUE')
+        metadata = metadata_add(metadata_base.copy(), table_meta, 'SPESIFIC_VALUE') # Merge the two sources of metadata
         metadata['MANDATORY'] = metadata['MANDATORY'].fillna('').str.lower().isin(['yes', 'nav']).astype(bool) # Mandatory column cleanup 
 
         metadata = update_metadata(metadata, 'MATRIX', 'MANUAL_VALUE', 'TN_' + table_ref)
@@ -132,10 +109,9 @@ def main():
 
         # pd.set_option('display.max_rows', None)
         # print(metadata[['KEYWORD', 'VALUE', 'SPESIFIC_VALUE', 'MANUAL_VALUE', 'DEFAULT_VALUE']])
-        # Print all keyword and value pairs that will be used in the PX file
+
         meta_out = metadata.copy()[(metadata['MANDATORY']) | (metadata.apply(lambda row: valid_value(row['VALUE']), axis=1))][['ORDER', 'KEYWORD', 'VALUE', 'TYPE', 'MANDATORY']].sort_values('ORDER')
         alert_missing_mandatory(meta_out) # Alert if any mandatory keywords are missing values
         list_of_lines = prepare_px_lines(meta_out, data_out) # Just print it out for now
         write_px(list_of_lines, file_path=px_output_path)
 
-        print(f"--- End processing data product / table.")
