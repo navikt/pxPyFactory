@@ -1,0 +1,7 @@
+{
+    "name": "Debug pxpyfactory as module",
+    "type": "python",
+    "request": "launch",
+    "module": "pxpyfactory",
+    "cwd": "${workspaceFolder}"
+}

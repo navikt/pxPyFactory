@@ -57,6 +57,8 @@ def prepare_px_lines(meta_df, data_df):
                 value_out = '"' + '", "'.join([str(x) for x in row_value]) + '"'
             else: # all(isinstance(x, (int, float)) for x in row_value):
                 value_out = ', '.join(str(x) for x in row_value)
+        elif row_type == 'text':
+            value_out = '"' + str(row_value) + '"'
         else:
             print(f"Unclear type for: keyword={row_keyword}, value={row_value}, type desc={row_type}, type of current value={type(row_value)})")
             value_out = '"' + str(row_value) + '"'
@@ -123,9 +125,7 @@ def prepare_data_matrix(values_dict, stub_list, heading_list, data_list, table_d
 
     # Set index to stub + heading columns, reindex to include all combinations, and sort index
     table_indexed = table_data.set_index(stub_list + heading_list).reindex(all_combinations).sort_index()
-    
-    # Fill NaN with 0 or any other placeholder if needed, and Reshape to 2D array
-    data_array = table_indexed[data_list[0]].fillna(0).to_numpy()
+    data_array = table_indexed[data_list[0]].to_numpy()
     data_out = pd.DataFrame(data_array.reshape(x_dim, y_dim), dtype=float)
     return data_out
 # _____________________________________________________________________________

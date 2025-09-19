@@ -15,7 +15,10 @@ def file_read(filepath, sheet_name='Ark1', sep=';', header=0):
             df = pd.read_csv(filepath, sep=sep, header=header)
         else:
             raise ValueError("Unsupported file type")
-        df.columns = [column.strip().upper().replace(" ", "_") for column in df.columns]
+        df.columns = [column.strip().upper().replace(" ", "_").replace("Æ", "AE").replace("Ø", "O").replace("Å", "AA") for column in df.columns]
+        return df
+    except FileNotFoundError:
+        print(f"File not found: {filepath}")
         return df
     except Exception as e:
         print(f"Error reading file {filepath}: {e}")
@@ -34,10 +37,10 @@ def find_path(df):
     folder_dict = {}
 
     for _, row in df.iterrows():
-        level1 = row['LEVEL_1']
-        level1_no = row['LEVEL_1_(NO)']
-        level2 = row['LEVEL_2']
-        level2_no = row['LEVEL_2_(NO)']
+        level1 = row['LEVEL_1_FOLDER']
+        level1_no = row['LEVEL_1']
+        level2 = row['LEVEL_2_FOLDER']
+        level2_no = row['LEVEL_2']
 
         # Add level 1 if not already present
         if level1 not in folder_dict:
