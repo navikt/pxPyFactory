@@ -31,7 +31,7 @@ def update_metadata(df, keyword, column, new_value, mandatory=True, order=900):
     return df
 # _____________________________________________________________________________
 # Prepare the lines that will be written to the .px file
-def prepare_px_lines(meta_df, data_df):
+def prepare_px_lines(meta_df, data_lines):
     list_of_lines_to_px = []
     fill_item = "."
     for _, meta_row in meta_df.iterrows():
@@ -42,10 +42,12 @@ def prepare_px_lines(meta_df, data_df):
             value_out = row_value
         elif row_type == 'integer/text': # This is for the DATA part
             value_out = ''
-            for i, row in enumerate(data_df.itertuples(index=False, name=None)):
-                value_out += '\n'
-                formatted_row = [f'"{fill_item}"' if pd.isnull(item) else item for item in row]
-                value_out += ' '.join(map(str, formatted_row))
+            for line in data_lines:
+            # for i, row in enumerate(data_df.itertuples(index=False, name=None)):
+                value_out += '\n' + line
+                # formatted_row = [f'"{fill_item}"' if pd.isnull(item) else item for item in row]
+                # value_out += ' '.join(map(str, formatted_row))
+                # value_out += ' '.join(map(str, line))
         # If none of the above, assume text
         elif isinstance(row_value, str):
             # print(f"Preparing for .px: {row_keyword}={row_value}, type desc={row_type}, type of current value={type(row_value)})")
@@ -105,7 +107,7 @@ def alert_missing_mandatory(df):
 
 # _____________________________________________________________________________
 # Calculate data matrix dimensions and reshape data to fit PX format
-def prepare_data_matrix(values_dict, stub_list, heading_list, data_list, table_data):
+def not_in_use__prepare_data_matrix(values_dict, stub_list, heading_list, data_list, table_data):
     # Calculate dimentions of the data matrix
     y_dim = 1
     x_dim = 1
@@ -113,7 +115,7 @@ def prepare_data_matrix(values_dict, stub_list, heading_list, data_list, table_d
     # for key in dict.keys(values_dict):
         if key in stub_list:
             x_dim *= len(values_dict[key])
-        if key in heading_list:
+        elif key in heading_list:
             y_dim *= len(values_dict[key])
 
     # Get all unique values for each stub and heading column

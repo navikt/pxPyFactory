@@ -60,24 +60,26 @@ def make_path(folder_dict, base_path):
     for level1, value1 in folder_dict.items():
         alias1 = value1.get('alias', '')
         level1_path = base_path / str(level1)
-        try_write(alias1, level1_path)
+        try_write_alias(alias1, level1_path)
         subfolders = value1.get('subfolder', {})
         for level2, value2 in subfolders.items():
             alias2 = value2.get('alias', '')
             level2_path = level1_path / str(level2)
-            try_write(alias2, level2_path)
+            try_write_alias(alias2, level2_path)
 # _____________________________________________________________________________
 # Save the metadata to a .px file
-def try_write(alias, path):
+def try_write_alias(alias, path, language=None):
+    filename = 'alias_' + language + '.txt' if language else 'alias.txt'
+    file_path = path / filename
     try:
         path.mkdir(parents=True, exist_ok=True)
     except Exception as e:
         print(f"Error creating folder {path}: {e}")
     try:
-        with open(path / 'no.alias', 'w', encoding='utf-8') as f:
+        with open(file_path, 'w', encoding='utf-8') as f:
             f.write(str(alias))
     except Exception as e:
-        print(f"Error writing alias file in {path}: {e}")
+        print(f"Error writing alias file {path_n_file}: {e}")
 
 # _____________________________________________________________________________
 # Save the metadata to a .px file
