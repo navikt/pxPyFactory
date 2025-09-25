@@ -15,17 +15,18 @@ def metadata_add(base_df, amendment_df, new_column_name):
     return base_df
 # _____________________________________________________________________________
 # ...
-def update_metadata(df, keyword, column, new_value, mandatory=True, order=900):
-    mask = df['KEYWORD'] == keyword
-    print(f"Updating SUBJECT_CODE to: {new_value}") if keyword == 'SUBJECT_CODE' else None
-    if mask.sum() == 0: # The keyword does not exist, so we add a new row
-        new_row = pd.Series({'KEYWORD': keyword, column: new_value, 'MANDATORY': mandatory, 'TYPE': 'text', 'ORDER': order}).reindex(df.columns)
-        df = pd.concat([df, new_row.to_frame().T], ignore_index=True)
-    elif mask.sum() == 1: # Only one entry found for the keyword, so we update it
-        df.at[df.index[mask][0], column] = new_value
-        df.at[df.index[mask][0], 'MANDATORY'] = mandatory
-    else: # The keyword exists multiple times -> Raise an error
-        raise ValueError(f"Multiple entries found for keyword: {', '.join(df['KEYWORD'].tolist())}")
+def update_metadata(df, column, updates_dict, mandatory=True, order=500):
+    for keyword, new_value in updates_dict.items():
+        mask = df['KEYWORD'] == keyword
+        print(f"Updating SUBJECT_CODE to: {new_value}") if keyword == 'SUBJECT_CODE' else None
+        if mask.sum() == 0: # The keyword does not exist, so we add a new row
+            new_row = pd.Series({'KEYWORD': keyword, column: new_value, 'MANDATORY': mandatory, 'TYPE': 'text', 'ORDER': order}).reindex(df.columns)
+            df = pd.concat([df, new_row.to_frame().T], ignore_index=True)
+        elif mask.sum() == 1: # Only one entry found for the keyword, so we update it
+            df.at[df.index[mask][0], column] = new_value
+            df.at[df.index[mask][0], 'MANDATORY'] = mandatory
+        else: # The keyword exists multiple times -> Raise an error
+            raise ValueError(f"Multiple entries found for keyword: {', '.join(df['KEYWORD'].tolist())}")
     # print(f"# Updated metadata for keyword '{keyword}':")
     # print(df[df['KEYWORD'] == keyword])
     return df
@@ -40,7 +41,7 @@ def prepare_px_lines(meta_df, data_lines):
         row_type = meta_row['TYPE']
         if row_type == 'integer':
             value_out = row_value
-        elif row_type == 'integer/text': # This is for the DATA part
+        elif row_type == 'data': # This is only for the DATA part
             value_out = ''
             for line in data_lines:
             # for i, row in enumerate(data_df.itertuples(index=False, name=None)):

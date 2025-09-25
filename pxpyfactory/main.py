@@ -60,11 +60,12 @@ def main():
     for idx, row in data_products.iterrows():
         table_ref       = 'NAV_' + row['TABLE_NO'] # Nav uses NAV_ as a prefix for table numbers
         table_name      = row['TITLE']
+        table_sep       = row['SEP'] # Separator used in .csv-file (used for reading input file)
         table_path      = os.path.abspath(os.path.join(input_path, (table_ref + '.csv')))
         table_meta_path = os.path.abspath(os.path.join(input_path, (table_ref + '_meta.csv')))
         px_output_path  = os.path.abspath(os.path.join(output_path, row['LEVEL_1_FOLDER'], row['LEVEL_2_FOLDER'], (table_ref + '.px')))
-        subject_code    = row['LEVEL_1_FOLDER'] + '\\' + row['LEVEL_2_FOLDER'] 
-        subject_area    = row['LEVEL_1'] + '\\' + row['LEVEL_2']
+        subject_code    = row['LEVEL_1_FOLDER'] # + '\\' + row['LEVEL_2_FOLDER'] 
+        subject_area    = row['LEVEL_1'] # + '\\' + row['LEVEL_2']
         data_list       = [sub.strip().upper() for sub in row['DATA'].split(',')]
         stub_list       = [sub.strip().upper() for sub in row['STUB'].split(',')]
         units_list      = [sub.strip().upper() for sub in row['UNITS'].split(',')]
@@ -73,10 +74,10 @@ def main():
         contvariable    = 'stat_var' # data_list[0] # Column name for contents variable - can probably be anything..
 
 
-        print(f"\nStart processing data product / table: {table_ref} {table_name}")
-        print(f"data_list: {data_list}")
+        print(f"\n{table_ref} {table_name} - Start processing data product / table")
 
-        table_data = file_read(table_path, sep=',') # Fetch data table from .parquet or .csv file
+        table_data = file_read(table_path, sep=table_sep) # Fetch data table from .parquet or .csv file
+        print(f"  Columns: {list(table_data.columns)}")
 
         # Ensure all non-data columns are strings
         for column in table_data.columns:
@@ -85,38 +86,50 @@ def main():
 
         column_list = list(table_data.columns) # Fetch column list from data table
         for data_col in data_list:
-            column_list.remove(data_col) # Remove data column from the list of columns to process
+            try:
+                column_list.remove(data_col) # Remove data column from the list of columns to process
+            except ValueError:
+                print(f"WARNING: Data column {data_col} not found in data table for {table_ref}.")
         heading_list = [contvariable]
         heading_list += [column for column in column_list if column not in stub_list] # Headings are all columns not in stub_list
 
         # Adds the column 'spesific_value' to 'metadata'. The value is from 'table_meta' (match on keyword)
         # This is spesific metadata for this data product - stored in a separate .csv-file
-        table_meta = file_read(table_meta_path)
-        if table_meta.empty or {'KEYWORD', 'VALUE'}.issubset(table_meta.columns): # If the spesific metadata file is missing or empty, create an empty dataframe
+        table_meta = file_read(table_meta_path, sep=table_sep)
+        if {'KEYWORD', 'VALUE'}.issubset(table_meta.columns): # Use spesific metadata if itis valid
+            print("File for spesific metadata found.")
+        else:
             table_meta = pd.DataFrame(columns=['KEYWORD', 'VALUE'])
-            print(f"Spesific metadata file was not found, and will not be used, for table {table_ref}.")
         metadata = metadata_add(metadata_base.copy(), table_meta, 'SPESIFIC_VALUE') # Merge the two sources of metadata
         metadata['MANDATORY'] = metadata['MANDATORY'].fillna('').str.lower().isin(['yes', 'nav']).astype(bool) # Mandatory column cleanup 
 
-        metadata = update_metadata(metadata, 'TABLEID', 'MANUAL_VALUE', table_ref)
-        metadata = update_metadata(metadata, 'MATRIX', 'MANUAL_VALUE', table_ref)
-        metadata = update_metadata(metadata, 'TITLE', 'MANUAL_VALUE', table_name)
-        metadata = update_metadata(metadata, 'STUB', 'MANUAL_VALUE', stub_list)
-        metadata = update_metadata(metadata, 'HEADING', 'MANUAL_VALUE', heading_list)
-        metadata = update_metadata(metadata, 'CONTVARIABLE', 'MANUAL_VALUE', contvariable)
-        metadata = update_metadata(metadata, 'UNITS', 'MANUAL_VALUE', units_list[0]) # Due to a faulty need for a plain UNITS, only the first unit is used here (unts for the rest are added later)
-        metadata = update_metadata(metadata, 'SUBJECT-CODE', 'MANUAL_VALUE', subject_code)
-        metadata = update_metadata(metadata, 'SUBJECT-AREA', 'MANUAL_VALUE', subject_area)
-        metadata = update_metadata(metadata, 'CONTENTS', 'MANUAL_VALUE', contents_var)
-        # metadata = update_metadata(metadata, 'LAST-UPDATED', 'MANUAL_VALUE', current_time)
-        metadata = update_metadata(metadata, 'LAST-UPDATED("' + data_list[0] + '")', 'MANUAL_VALUE', current_time) ## Should probably be for all data columns
-        metadata = update_metadata(metadata, 'VALUES("' + contvariable + '")', 'MANUAL_VALUE', data_list)
+#----------------------------------
+        manual_metadata_updates_dict = {
+            'TABLEID':      table_ref     ,
+            'MATRIX':       table_ref     ,
+            'TITLE':        table_name    ,
+            'STUB':         stub_list     ,
+            'HEADING':      heading_list  ,
+            'CONTVARIABLE': contvariable  ,
+            'UNITS':        '-'           , # Due to a faulty need for a plain UNITS, only the first unit is used here (unts for the rest are added later)
+            'SUBJECT-CODE': subject_code  ,
+            'SUBJECT-AREA': subject_area  ,
+            'CONTENTS':     contents_var  ,
+        }
 
+        # Add metadata for each data column
+        for index, data_col in enumerate(data_list):
+            manual_metadata_updates_dict['LAST-UPDATED("' + data_col + '")'] = current_time
+            manual_metadata_updates_dict['UNITS("' + data_col + '")'] = units_list[index] if index < len(units_list) else units_list[0] # If there is more data columns than units, use the first unit for the rest
+        
         values_dict = {} # Dictionary that will contain the unique values for each column in the data table
         for column_name in column_list:
             values_dict[column_name] = sorted(pd.unique(table_data[column_name]))
             # print(f"Kolonne med {len(values_dict[column_name])} unike verdier: {column_name} - {str(values_dict[column_name])}")
-            metadata = update_metadata(metadata, 'VALUES("' + column_name + '")', 'MANUAL_VALUE', values_dict[column_name])
+            manual_metadata_updates_dict['VALUES("' + column_name + '")'] = values_dict[column_name]
+        manual_metadata_updates_dict['VALUES("' + contvariable + '")'] = data_list
+
+        metadata = update_metadata(metadata, 'MANUAL_VALUE', manual_metadata_updates_dict)
 
         # Set the value to the first non-null value in this priority
         metadata['VALUE'] = metadata[['SPESIFIC_VALUE', 'MANUAL_VALUE', 'DEFAULT_VALUE']].apply(get_first_notnull, axis=1)
@@ -133,7 +146,7 @@ def main():
         # Merge with your original data, and fill missing combinations:
         fill_value = metadata.loc[metadata['KEYWORD'] == 'DATASYMBOL2', 'VALUE'].iloc[0]
         expanded_table_data = pd.merge(all_combinations, table_data, on=stub_list + piv_columns, how='left').fillna(fill_value)
-        data_pivot = expanded_table_data.pivot_table(index=stub_list, columns=piv_columns, values=data_list, aggfunc='first')
+        data_pivot = expanded_table_data.pivot_table(index=stub_list, columns=piv_columns, values=data_list, aggfunc='first') # Pivot the table to get the desired format
         data_lines = [' '.join(map(str, row)) for row in data_pivot.values] # Convert each row to a space-separated string
 
         alert_missing_mandatory(metadata) # Alert if any mandatory keywords are missing values
