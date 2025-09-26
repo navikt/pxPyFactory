@@ -1,5 +1,4 @@
 import pandas as pd
-from datetime import datetime
 
 # _____________________________________________________________________________
 # For each row in metadata_base, if the 'keyword' is found in amendment_df,
@@ -106,29 +105,3 @@ def alert_missing_mandatory(df):
     print(f"Missing mandatory keywords: {', '.join(mandatory_and_missing)}") if len(mandatory_and_missing) > 0 else None
     # raise ValueError(f"Missing mandatory keywords: {', '.join(mandatory_and_missing)}")
 
-# _____________________________________________________________________________
-# Calculate data matrix dimensions and reshape data to fit PX format
-def not_in_use__prepare_data_matrix(values_dict, stub_list, heading_list, data_list, table_data):
-    # Calculate dimentions of the data matrix
-    y_dim = 1
-    x_dim = 1
-    for key in values_dict.keys():
-    # for key in dict.keys(values_dict):
-        if key in stub_list:
-            x_dim *= len(values_dict[key])
-        elif key in heading_list:
-            y_dim *= len(values_dict[key])
-
-    # Get all unique values for each stub and heading column
-    stub_values = [values_dict[stub] for stub in stub_list]
-    heading_values = [values_dict[heading] for heading in heading_list]
-
-    # Create a MultiIndex of all possible combinations
-    all_combinations = pd.MultiIndex.from_product(stub_values + heading_values, names=stub_list + heading_list)
-
-    # Set index to stub + heading columns, reindex to include all combinations, and sort index
-    table_indexed = table_data.set_index(stub_list + heading_list).reindex(all_combinations).sort_index()
-    data_array = table_indexed[data_list[0]].to_numpy()
-    data_out = pd.DataFrame(data_array.reshape(x_dim, y_dim), dtype=float)
-    return data_out
-# _____________________________________________________________________________
