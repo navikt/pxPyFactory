@@ -1,40 +1,81 @@
 import pandas as pd
+from pxpyfactory.read_write import file_read
 
 # _____________________________________________________________________________
+def prepare_data_products(common_meta_filepath):
+    data_products = file_read(common_meta_filepath, sheet_name='dataprodukter') # Get the overview of all data products
+    data_products = data_products.astype(str) # Force content in excel sheet to just strings for easier use
+    # Column referances in the data_products sheet
+    data_products.rename(columns={'BYGG_NAA': 'BUILD_NOW'}, inplace=True)
+    data_products.rename(columns={'OMRAADE_MAPPE': 'LEVEL_1_FOLDER'}, inplace=True)
+    data_products.rename(columns={'OMRAADE': 'LEVEL_1'}, inplace=True) # område oversettes noen ganger i Nav til field
+    data_products.rename(columns={'TEMA_MAPPE': 'LEVEL_2_FOLDER'}, inplace=True)
+    data_products.rename(columns={'TEMA': 'LEVEL_2'}, inplace=True) # tema oversettes ofte i Nav til theme
+    data_products.rename(columns={'NUMMER': 'TABLE_NO'}, inplace=True)
+    data_products.rename(columns={'TITTEL': 'TITLE'}, inplace=True)
+    data_products.rename(columns={'BESKRIVELSE': 'CONTENTS'}, inplace=True)
+    # data_products.rename(columns={'STUB': 'STUB'}, inplace=True)
+    # data_products.rename(columns={'DATA': 'DATA'}, inplace=True)
+    # data_products.rename(columns={'UNITS': 'UNITS'}, inplace=True)
+    data_products = data_products[data_products['BUILD_NOW'].isin(['x'])] # Filter to only include tables tagged in Build now column
+
+    duplicates_mask = data_products.duplicated(subset=['TABLE_NO'], keep='first') # List of dublicate table numbers
+    duplicates_df = data_products[duplicates_mask].copy() # Dataframe with duplicate table numbers
+    data_products = data_products[~duplicates_mask].copy() # Dataframe with unique table numbers (duplicates removed)
+
+    print('\nData products / tables to create px-files from:')
+    print(data_products[['LEVEL_1_FOLDER', 'LEVEL_2_FOLDER', 'TABLE_NO', 'TITLE', 'STUB', 'DATA', 'UNITS']])
+    if duplicates_df.shape[0] > 0:
+        print('--- Duplicated table numbers (will be skipped):')
+        print(duplicates_df)
+
+    return data_products
+
+# _____________________________________________________________________________
+def prepare_metadata_base(common_meta_filepath):
+    # Prepare general metadata from Excel-sheets - common for all data products
+    # Spesific values for each data product will be handled for each data product in separate .csv-files
+    meta_default = file_read(common_meta_filepath, sheet_name='metadata-default')
+    meta_default = meta_default[['ORDER','KEYWORD','MANDATORY','DEFAULT_VALUE','TYPE']] # Keep only relevant columns
+    meta_manual = file_read(common_meta_filepath, sheet_name='metadata-manual') # Manual updates on values for some keywords (can be empty) 
+    metadata_base = metadata_add(meta_default, meta_manual, 'MANUAL_VALUE') # Adds the column 'manual_value' to 'meta_default'. The value is from 'meta_manual' (match on keyword)
+
+    return metadata_base
+# _____________________________________________________________________________
 # For each row in metadata_base, if the 'keyword' is found in amendment_df,
-# insert the value from amendment_df to the new_column_name-column in base_df.
-def metadata_add(base_df, amendment_df, new_column_name):
-    base_df[new_column_name] = None
-    for idx, row in base_df.iterrows():
+# insert the value from amendment_df to the new_column_name-column in metadata.
+def metadata_add(metadata, amendment_df, new_column_name):
+    metadata[new_column_name] = None
+    for idx, row in metadata.iterrows():
         match = amendment_df[amendment_df['KEYWORD'] == row['KEYWORD']]
         if not match.empty:
-            base_df.at[idx, new_column_name] = match.iloc[0]['VALUE']
+            metadata.at[idx, new_column_name] = match.iloc[0]['VALUE']
 #    print('Added value from other source:')
-#    print(base_df[base_df[new_column_name].notnull()])
-    return base_df
+#    print(metadata[metadata[new_column_name].notnull()])
+    return metadata
 # _____________________________________________________________________________
 # ...
-def update_metadata(df, column, updates_dict, mandatory=True, order=500):
+def update_metadata(metadata, column, updates_dict, mandatory=True, order=500):
     for keyword, new_value in updates_dict.items():
-        mask = df['KEYWORD'] == keyword
+        mask = metadata['KEYWORD'] == keyword
         print(f"Updating SUBJECT_CODE to: {new_value}") if keyword == 'SUBJECT_CODE' else None
         if mask.sum() == 0: # The keyword does not exist, so we add a new row
-            new_row = pd.Series({'KEYWORD': keyword, column: new_value, 'MANDATORY': mandatory, 'TYPE': 'text', 'ORDER': order}).reindex(df.columns)
-            df = pd.concat([df, new_row.to_frame().T], ignore_index=True)
+            new_row = pd.Series({'KEYWORD': keyword, column: new_value, 'MANDATORY': mandatory, 'TYPE': 'text', 'ORDER': order}).reindex(metadata.columns)
+            metadata = pd.concat([metadata, new_row.to_frame().T], ignore_index=True)
         elif mask.sum() == 1: # Only one entry found for the keyword, so we update it
-            df.at[df.index[mask][0], column] = new_value
-            df.at[df.index[mask][0], 'MANDATORY'] = mandatory
+            metadata.at[metadata.index[mask][0], column] = new_value
+            metadata.at[metadata.index[mask][0], 'MANDATORY'] = mandatory
         else: # The keyword exists multiple times -> Raise an error
-            raise ValueError(f"Multiple entries found for keyword: {', '.join(df['KEYWORD'].tolist())}")
+            raise ValueError(f"Multiple entries found for keyword: {', '.join(metadata['KEYWORD'].tolist())}")
     # print(f"# Updated metadata for keyword '{keyword}':")
-    # print(df[df['KEYWORD'] == keyword])
-    return df
+    # print(metadata[metadata['KEYWORD'] == keyword])
+    return metadata
 # _____________________________________________________________________________
 # Prepare the lines that will be written to the .px file
-def prepare_px_lines(meta_df, data_lines):
+def prepare_px_lines(metadata, data_lines):
     list_of_lines_to_px = []
     fill_item = "."
-    for _, meta_row in meta_df.iterrows():
+    for _, meta_row in metadata.iterrows():
         row_keyword = meta_row['KEYWORD']
         row_value = meta_row['VALUE']
         row_type = meta_row['TYPE']
@@ -96,8 +137,8 @@ def valid_value(value):
     else:
         return False
 # _____________________________________________________________________________
-def alert_missing_mandatory(df):
-    mandatory_and_missing = df['KEYWORD'][df['MANDATORY'] & (df.apply(lambda row: valid_value(row['VALUE']), axis=1) == False)].tolist()
+def alert_missing_mandatory(metadata):
+    mandatory_and_missing = metadata['KEYWORD'][metadata['MANDATORY'] & (metadata.apply(lambda row: valid_value(row['VALUE']), axis=1) == False)].tolist()
     try:
         mandatory_and_missing.remove('DATA')
     except ValueError:
