@@ -1,2 +1,2 @@
-from pxpyfactory.main import main
-main()
+from pxpyfactory.__main__ import *
+go()

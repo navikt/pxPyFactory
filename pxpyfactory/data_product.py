@@ -20,6 +20,7 @@ class PXDataProduct:
         # self.heading_list    = [] # List of all heading columns (all non-data and non-stub columns)
         self.stub_list       = [sub.strip().upper() for sub in row['STUB'].split(',')]
         self.data_list       = [sub.strip().upper() for sub in row['DATA'].split(',')]
+        self.data_list_pure  = [sub.strip()         for sub in row['DATA'].split(',')]
         self.units_list      = [sub.strip().upper() for sub in row['UNITS'].split(',')]
 
         self.contents_var    = row['CONTENTS']
@@ -96,7 +97,7 @@ class PXDataProduct:
 
         for key, value in values_dict.items():
             manual_metadata_updates_dict['VALUES("' + key + '")'] = value
-        manual_metadata_updates_dict['VALUES("' + self.contvariable + '")'] = self.data_list
+        manual_metadata_updates_dict['VALUES("' + self.contvariable + '")'] = self.data_list_pure
 
         return manual_metadata_updates_dict
 
