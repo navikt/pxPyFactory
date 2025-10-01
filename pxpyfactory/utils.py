@@ -1,22 +1,24 @@
 import pandas as pd
-from pxpyfactory.read_write import file_read
+from pxpyfactory.io_utils import file_read
 
 # _____________________________________________________________________________
 def prepare_data_products(common_meta_filepath):
     data_products = file_read(common_meta_filepath, sheet_name='dataprodukter') # Get the overview of all data products
     data_products = data_products.astype(str) # Force content in excel sheet to just strings for easier use
     # Column referances in the data_products sheet
-    data_products.rename(columns={'BYGG_NAA': 'BUILD_NOW'}, inplace=True)
-    data_products.rename(columns={'OMRAADE_MAPPE': 'LEVEL_1_FOLDER'}, inplace=True)
-    data_products.rename(columns={'OMRAADE': 'LEVEL_1'}, inplace=True) # område oversettes noen ganger i Nav til field
-    data_products.rename(columns={'TEMA_MAPPE': 'LEVEL_2_FOLDER'}, inplace=True)
-    data_products.rename(columns={'TEMA': 'LEVEL_2'}, inplace=True) # tema oversettes ofte i Nav til theme
-    data_products.rename(columns={'NUMMER': 'TABLE_NO'}, inplace=True)
-    data_products.rename(columns={'TITTEL': 'TITLE'}, inplace=True)
-    data_products.rename(columns={'BESKRIVELSE': 'CONTENTS'}, inplace=True)
-    # data_products.rename(columns={'STUB': 'STUB'}, inplace=True)
-    # data_products.rename(columns={'DATA': 'DATA'}, inplace=True)
-    # data_products.rename(columns={'UNITS': 'UNITS'}, inplace=True)
+    data_products.rename(columns={'BYGG_NAA'      : 'BUILD_NOW'      }, inplace=True)
+    data_products.rename(columns={'OMRAADE_MAPPE' : 'LEVEL_1_FOLDER' }, inplace=True)
+    data_products.rename(columns={'OMRAADE'       : 'LEVEL_1'        }, inplace=True) # område oversettes noen ganger i Nav til field
+    data_products.rename(columns={'TEMA_MAPPE'    : 'LEVEL_2_FOLDER' }, inplace=True)
+    data_products.rename(columns={'TEMA'          : 'LEVEL_2'        }, inplace=True) # tema oversettes ofte i Nav til theme
+    data_products.rename(columns={'NUMMER'        : 'TABLE_NO'       }, inplace=True)
+    data_products.rename(columns={'TITTEL'        : 'TITLE'          }, inplace=True)
+    data_products.rename(columns={'BESKRIVELSE'   : 'CONTENTS'       }, inplace=True)
+    # data_products.rename(columns={'STUB'          : 'STUB'           }, inplace=True)
+    # data_products.rename(columns={'DATA'          : 'DATA'           }, inplace=True)
+    # data_products.rename(columns={'UNITS'         : 'UNITS'          }, inplace=True)
+    # data_products.rename(columns={'SEP'           : 'SEP'            }, inplace=True)
+
     data_products = data_products[data_products['BUILD_NOW'].isin(['x'])] # Filter to only include tables tagged in Build now column
 
     duplicates_mask = data_products.duplicated(subset=['TABLE_NO'], keep='first') # List of dublicate table numbers
@@ -72,7 +74,7 @@ def update_metadata(metadata, column, updates_dict, mandatory=True, order=500):
     return metadata
 # _____________________________________________________________________________
 # Prepare the lines that will be written to the .px file
-def prepare_px_lines(metadata, data_lines):
+def serialize_to_px_format(metadata, data_lines):
     list_of_lines_to_px = []
     fill_item = "."
     for _, meta_row in metadata.iterrows():

@@ -1,5 +1,5 @@
 from pathlib import Path
-from pxpyfactory.read_write import write_folder_alias
+from pxpyfactory.io_utils import write_folder_alias
 
 # _____________________________________________________________________________
 # Create folder structure from data_products dataframe

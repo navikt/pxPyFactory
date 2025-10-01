@@ -1,11 +1,34 @@
 import pandas as pd
 # import pprint
+import os
+
+def set_script_path():
+    # Set folders and file-paths
+    script_path = os.path.dirname(os.path.abspath(__file__)) # Get path for this script location
+    os.chdir(script_path) # Set working directory
+    return script_path
+
+def get_path(*path_parts):
+    return os.path.abspath(os.path.join(*path_parts))
+
+def file_exists(filepath):
+    try:
+        if os.path.exists(filepath):
+            return True
+        else:
+            return False
+    except Exception as e:
+        print(f"Error checking file existence {filepath}: {e}")
+        return False
 
 # _____________________________________________________________________________
 # Reads content from Excel or CSV files and returns a DataFrame
 # If the file cannot be read, it returns an empty DataFrame and prints an error message
 def file_read(filepath, sheet_name='Ark1', sep=';', header=0):
     df = pd.DataFrame()
+    if not file_exists(filepath):
+        print(f"File not found: {filepath}")
+        return df
     try:
         if filepath.endswith('.xlsx'):
             df = pd.read_excel(filepath, sheet_name=sheet_name, header=header)
@@ -14,9 +37,6 @@ def file_read(filepath, sheet_name='Ark1', sep=';', header=0):
         else:
             raise ValueError("Unsupported file type")
         df.columns = [column.strip().upper().replace(" ", "_").replace("Æ", "AE").replace("Ø", "O").replace("Å", "AA") for column in df.columns]
-        return df
-    except FileNotFoundError:
-        print(f"File not found: {filepath}")
         return df
     except Exception as e:
         print(f"Error reading file {filepath}: {e}")
