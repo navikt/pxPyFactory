@@ -3,3 +3,4 @@ _ignored_by_git/
 # Output folder content
 output/*
 !output/.gitkeep
+~$*
