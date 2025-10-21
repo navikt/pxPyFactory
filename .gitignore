@@ -1,6 +1,7 @@
 _ignored_by_git/
 
 # Output folder content
+pxpyfactory/__pycache__
 output/*
 !output/.gitkeep
 ~$*
