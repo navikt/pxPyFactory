@@ -2,7 +2,7 @@ import pandas as pd
 from itertools import product
 from datetime import datetime
 from pxpyfactory.io_utils import get_path, file_exists, file_read
-from pxpyfactory.utils import update_metadata, metadata_add, get_first_notnull, valid_value, alert_missing_mandatory, serialize_to_px_format
+from pxpyfactory.utils import prep_list_from_string, update_metadata, metadata_add, get_first_notnull, valid_value, is_list_empty, alert_missing_mandatory, serialize_to_px_format
 # import pprint
 
 class PXDataProduct:
@@ -12,14 +12,16 @@ class PXDataProduct:
         self.table_ref       = 'NAV_' + dp_row['TABLE_NO'] # Nav uses NAV_ as a prefix for table numbers
         self.table_name      = dp_row['TITLE']
         self.table_sep       = dp_row['SEP'] # Separator used in .csv-file (used for reading input file)
+        print(f"Data product separator set to: '{self.table_sep}'")
         self.subject_code    = dp_row['LEVEL_1_FOLDER'] # + '\\' + dp_row['LEVEL_2_FOLDER'] 
         self.subject_area    = dp_row['LEVEL_1'] # + '\\' + dp_row['LEVEL_2']
 
-        # self.heading_list    = [] # List of all heading columns (all non-data and non-stub columns)
-        self.stub_list       = [sub.strip().upper() for sub in dp_row['STUB'].split(',')]
-        self.data_list       = [sub.strip().upper() for sub in dp_row['DATA'].split(',')]
-        self.data_list_pure  = [sub.strip()         for sub in dp_row['DATA'].split(',')] # keep formatting of data columns since they are used as values
-        self.units_list      = [sub.strip().upper() for sub in dp_row['UNITS'].split(',')]
+        self.stub_list       = prep_list_from_string(dp_row['STUB'])
+        self.stub_list       = prep_list_from_string(dp_row['STUB'])
+        self.heading_list    = prep_list_from_string(dp_row['HEADING'])
+        self.data_list       = prep_list_from_string(dp_row['DATA'])
+        self.data_list_pure  = prep_list_from_string(dp_row['DATA'], to_upper=False) # keep formatting of data columns since they are used as values
+        self.units_list      = prep_list_from_string(dp_row['UNITS'])
 
         self.contents_var    = dp_row['CONTENTS']
         self.contvariable    = 'STAT_VAR' # data_list[0] # Column name for contents variable - can probably be anything..
@@ -38,17 +40,18 @@ class PXDataProduct:
             print(f"\nWARNING: {self.table_ref} {self.table_name} - No data found. Skipping this data product / table.")
             return False
 
-        table_data, values_dict, heading_list = self._prepare_table_data()
-        metadata_prep = self.main_app.metadata_base.copy()
+        self.table_data = file_read(self.table_path, sep=self.table_sep) # Fetch data table from .parquet or .csv file
+        self._set_columns() # Set stub, heading and data columns if not set, based on data table content
+        values_dict = self._prepare_table_data() # Create a dictionary with unique values for each column and ensure correct formatting of content
 
         # Make dict from data product info:
-        manual_metadata_updates_dict = self._get_manual_metadata_updates(values_dict, heading_list)
-        # Add manual data from Excel to metadata df:
-        metadata_prep = update_metadata(metadata_prep, 'MANUAL_VALUE', manual_metadata_updates_dict)
+        manual_metadata_updates_dict = self._get_manual_metadata_updates(values_dict)
+        # Merge common metadata base with manual metadata (manual metadata are placed in 'MANUAL_VALUE' column):
+        metadata_prep = update_metadata(self.main_app.metadata_base.copy(), 'MANUAL_VALUE', manual_metadata_updates_dict)
         # Prepare final metadata values for this data product, and get the fill_value for missing data:
         metadata, fill_value = self._prepare_metadata_values(metadata_prep)
 
-        data_lines = self._get_lines_of_data_from_table(table_data, values_dict, heading_list, fill_value)
+        data_lines = self._get_lines_of_data_from_table(values_dict, fill_value)
         alert_missing_mandatory(metadata) # Alert if any mandatory keywords are missing values
 
         # Final product from each data product is the content to be written to the .px file:
@@ -57,34 +60,79 @@ class PXDataProduct:
         return True
 
 
-    # Prepares a df from the data table (.csv or .parquet file)
-    # + Create a dictionary with unique values for each column
-    # + Create a list of all heading columns (all non-data and non-stub columns)
+    # Update stub_list, heading_list and data_list based on content of table_data if any of the lists are empty
+    def _set_columns(self):
+        remaining_columns = self.table_data.columns.tolist()
+        print(f"  All columns in table: {remaining_columns}")
+
+        print(f"  Initial data_list: {self.data_list}")
+        if is_list_empty(self.data_list):
+            uniqe_values_in_columns = {}
+            for column in remaining_columns:
+                uniqe_values_in_columns[column] = len(pd.unique(self.table_data[column]))
+            # find column with most unique values and set as data column
+            data_column = max(uniqe_values_in_columns, key=uniqe_values_in_columns.get)
+            self.data_list = [data_column]
+            remaining_columns.remove(data_column)
+            for key, value in uniqe_values_in_columns.items():
+                if (key in remaining_columns) and (value > 1000):
+                    self.data_list.append(key)
+                    remaining_columns.remove(key)
+            self.data_list_pure = self.data_list
+        else:
+            for column in self.data_list:
+                if column in remaining_columns:
+                    remaining_columns.remove(column)
+        print(f"  Updated data_list: {self.data_list}")
+
+        print(f"  Initial stub_list: {self.stub_list}")
+        if is_list_empty(self.stub_list):
+            for column in remaining_columns:
+                if column not in self.heading_list:
+                    self.stub_list = [column]
+                    remaining_columns.remove(column)
+                    break # only pick the first column found as stub
+        else:
+            for column in self.stub_list:
+                if column in remaining_columns:
+                    remaining_columns.remove(column)
+        print(f"  Updated stub_list: {self.stub_list}")
+
+        print(f"  Initial heading_list: {self.heading_list}")
+        if is_list_empty(self.heading_list):
+            self.heading_list = []
+        # Add all remaining columns must be headings:
+        for column in remaining_columns:
+            if column not in self.heading_list:
+                self.heading_list.append(column)
+        print(f"  Updated heading_list: {self.heading_list}")
+
+
+    # Create a dictionary with unique values for each column
+    # + ensure correct formatting of content
     def _prepare_table_data(self):
-        table_data = file_read(self.table_path, sep=self.table_sep) # Fetch data table from .parquet or .csv file
-        print(f"  Columns: {list(table_data.columns)}")
-
         values_dict = {} # Dictionary that will contain the unique values for each column in the data table
-        heading_list = []
-        for column in table_data.columns:
-            if column not in self.data_list:
-                # Ensure all values in non-data columns are strings (to avoid issues with mixed types)
-                table_data[column] = table_data[column].apply(lambda x: str(x) if pd.notnull(x) else x)
-                values_dict[column] = sorted(pd.unique(table_data[column]))
-                if column not in self.stub_list:
-                    heading_list.append(column)
-
-        return table_data, values_dict, heading_list
+        for column in self.table_data.columns:
+            if column in self.data_list:
+                # Ensure all decimal commas are replaced with dots in data columns
+                self.table_data[column] = self.table_data[column].apply(lambda x: x.replace(',', '.') if isinstance(x, str) and ',' in x else x)
+                self.table_data[column] = self.table_data[column].apply(lambda x: x.replace(' ', '_') if isinstance(x, str) and ' ' in x else x)
+            else:
+                # Ensure all values in non-data columns are strings (to avoid issues with mixed types):
+                self.table_data[column] = self.table_data[column].apply(lambda x: str(x) if pd.notnull(x) else '')
+                # Store unique values in column for use in VALUES-keywords:
+                values_dict[column] = sorted(pd.unique(self.table_data[column]))
+        return values_dict
 
     # Create a dictionary with manual metadata updates based on data product info (from Excel sheet 'dataprodukter')
-    def _get_manual_metadata_updates(self, values_dict, heading_list):
+    def _get_manual_metadata_updates(self, values_dict):
         # Prepare dictionary with px-parameters from input files:
         manual_metadata_updates_dict = {
             'TABLEID':      self.table_ref     ,
             'MATRIX':       self.table_ref     ,
             'TITLE':        self.table_name    ,
             'STUB':         self.stub_list     ,
-            'HEADING':      [self.contvariable] + heading_list, # Add contvariable to the list of headings,
+            'HEADING':      [self.contvariable] + self.heading_list, # Add contvariable to the list of headings,
             'CONTVARIABLE': self.contvariable  ,
             'UNITS':        '-'                , # Due to a faulty need for a plain UNITS, only the first unit is used here (unts for the rest are added later)
             'SUBJECT-CODE': self.subject_code  ,
@@ -93,7 +141,14 @@ class PXDataProduct:
         }
         # Add px-parameter for each data column:
         for index, data_col in enumerate(self.data_list):
-            manual_metadata_updates_dict['UNITS("' + data_col + '")'] = self.units_list[index] if index < len(self.units_list) else self.units_list[0] # If there is more data columns than units, use the first unit for the rest
+            # If there is more data columns than units, use the first unit for the rest
+            if self.units_list == []:
+                units_value = ''
+            elif index < len(self.units_list):
+                units_value = self.units_list[index]
+            else:
+                units_value = self.units_list[0]
+            manual_metadata_updates_dict['UNITS("' + data_col + '")'] = units_value
             manual_metadata_updates_dict['LAST-UPDATED("' + data_col + '")'] = datetime.now().strftime("%Y%m%d %H:%M") # current time on px-format
             # If needed, more data-column specific px-parameters can be added. Value can be based on 'spesific_value' and implementet a few lines lower.
             # manual_metadata_updates_dict['STOCKFA("' + data_col + '")'] = 
@@ -136,14 +191,35 @@ class PXDataProduct:
     # Create the data content lines to the px-file.
     # To get the correct format all possible combinations of stub and heading values must be created, and merged with the data table.
     # Missing values are filled with the fill_value from metadata.
-    def _get_lines_of_data_from_table(self, table_data, values_dict, heading_list, fill_value):
+    def __get_lines_of_data_from_table(self, values_dict, fill_value):
         # Create a DataFrame with all possible combinations:
-        all_combinations = pd.DataFrame(list(product(*values_dict.values())), columns=self.stub_list + heading_list)
         # Merge full matrix with data, and fill missing cells:
-        expanded_table_data = pd.merge(all_combinations, table_data, on=self.stub_list + heading_list, how='left').fillna(fill_value)
+        expanded_table_data = pd.merge(all_combinations, self.table_data, on=self.stub_list + self.heading_list, how='left').fillna(fill_value)
         # Pivot the table to get the desired format:
-        data_pivot = expanded_table_data.pivot_table(index=self.stub_list, columns=heading_list, values=self.data_list, aggfunc='first')
+        data_pivot = expanded_table_data.pivot_table(index=self.stub_list, columns=self.heading_list, values=self.data_list, aggfunc='first')
 
         data_lines = [' '.join(map(str, row)) for row in data_pivot.values] # Convert each row to a space-separated string
+
+        return data_lines
+    
+    def _get_lines_of_data_from_table(self, values_dict, fill_value):
+        # 1. Generate all possible combinations in the correct order
+        stub_and_headings = self.stub_list + self.heading_list
+        all_combinations_of_stub_heading = pd.DataFrame(list(product(*[values_dict[axis] for axis in stub_and_headings])), columns=stub_and_headings)
+        # print(all_combinations_of_stub_heading)
+        # 2. Merge with actual data
+        expanded_table_data = pd.merge(all_combinations_of_stub_heading, self.table_data, on=stub_and_headings, how='left').fillna(fill_value)
+        # print(expanded_table_data)
+
+        data_pivot = expanded_table_data.pivot_table(index=self.stub_list, columns=self.heading_list, values=self.data_list, aggfunc='first')
+        data_lines = [' '.join(map(str, row)) for row in data_pivot.values] # Convert each row to a space-separated string
+
+
+        # # 3. For each row, extract the data columns in the order of self.data_list
+        # data_lines = []
+        # for _, row in expanded_table_data.iterrows():
+        #     # If you have multiple data columns, you may want to join them all
+        #     values = [row[data_col] for data_col in self.data_list]
+        #     data_lines.append(' '.join(map(str, values)))
 
         return data_lines

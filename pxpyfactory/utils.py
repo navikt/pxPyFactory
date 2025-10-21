@@ -4,7 +4,7 @@ from pxpyfactory.io_utils import file_read
 # _____________________________________________________________________________
 def prepare_data_products(common_meta_filepath):
     data_products = file_read(common_meta_filepath, sheet_name='dataprodukter') # Get the overview of all data products
-    data_products = data_products.astype(str) # Force content in excel sheet to just strings for easier use
+    data_products = data_products.applymap(lambda x: str(x) if pd.notnull(x) else None) # Force content in excel sheet to just strings for easier use (None for empty cells)
     # Column referances in the data_products sheet
     data_products.rename(columns={'BYGG_NAA'      : 'BUILD_NOW'      }, inplace=True)
     data_products.rename(columns={'OMRAADE_MAPPE' : 'LEVEL_1_FOLDER' }, inplace=True)
@@ -15,18 +15,19 @@ def prepare_data_products(common_meta_filepath):
     data_products.rename(columns={'TITTEL'        : 'TITLE'          }, inplace=True)
     data_products.rename(columns={'BESKRIVELSE'   : 'CONTENTS'       }, inplace=True)
     # data_products.rename(columns={'STUB'          : 'STUB'           }, inplace=True)
+    # data_products.rename(columns={'HEADING'       : 'HEADING'        }, inplace=True)
     # data_products.rename(columns={'DATA'          : 'DATA'           }, inplace=True)
     # data_products.rename(columns={'UNITS'         : 'UNITS'          }, inplace=True)
     # data_products.rename(columns={'SEP'           : 'SEP'            }, inplace=True)
 
-    data_products = data_products[data_products['BUILD_NOW'].isin(['x'])] # Filter to only include tables tagged in Build now column
+    data_products = data_products[data_products['BUILD_NOW'] == 'x'] # .isin(['x'])] # Filter to only include tables tagged in Build now column
 
     duplicates_mask = data_products.duplicated(subset=['TABLE_NO'], keep='first') # List of dublicate table numbers
     duplicates_df = data_products[duplicates_mask].copy() # Dataframe with duplicate table numbers
     data_products = data_products[~duplicates_mask].copy() # Dataframe with unique table numbers (duplicates removed)
 
     print('\nData products / tables to create px-files from:')
-    print(data_products[['LEVEL_1_FOLDER', 'LEVEL_2_FOLDER', 'TABLE_NO', 'TITLE', 'STUB', 'DATA', 'UNITS']])
+    print(data_products[['LEVEL_1_FOLDER', 'LEVEL_2_FOLDER', 'TABLE_NO', 'TITLE', 'STUB', 'HEADING', 'DATA', 'UNITS']])
     if duplicates_df.shape[0] > 0:
         print('--- Duplicated table numbers (will be skipped):')
         print(duplicates_df)
@@ -122,6 +123,30 @@ def get_first_notnull(row):
         else:
             continue
     return ''
+# _____________________________________________________________________________
+def is_list_empty(check_list):
+    if check_list is None:
+        return True
+    elif check_list in ([''], ['NAN']):
+        return True
+    elif len(check_list) == 0:
+        return True
+    else:
+        return False
+# _____________________________________________________________________________
+def prep_list_from_string(in_string, separator=',', to_upper=True):
+    if in_string is None:
+        out_list = []
+    elif isinstance(in_string, str):
+        if to_upper:
+            out_list = [sub.strip().upper() for sub in in_string.split(separator)]
+        else:
+            out_list = [sub.strip() for sub in in_string.split(separator)]
+    elif isinstance(in_string, (int, float)):
+        out_list = [str(in_string)]
+    else:
+        out_list = []
+    return out_list
 # _____________________________________________________________________________
 def valid_value(value):
     # If value is a list, tuple, or np.ndarray
