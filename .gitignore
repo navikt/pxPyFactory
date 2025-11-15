@@ -1,9 +1,13 @@
 _ignored_by_git/
 
 # Output folder content
-pxpyfactory/__pycache__
+pxpyfactory/__pycache__/
+
 input/*
+!input/.gitkeep
 !input/*.xlsx
+
 output/*
 !output/.gitkeep
+
 ~$*

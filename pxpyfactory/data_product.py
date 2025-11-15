@@ -1,18 +1,18 @@
 import pandas as pd
+import hashlib
 from itertools import product
-from datetime import datetime
-from pxpyfactory.io_utils import get_path, file_exists, file_read
-from pxpyfactory.utils import prep_list_from_string, update_metadata, metadata_add, get_first_notnull, valid_value, is_list_empty, alert_missing_mandatory, serialize_to_px_format
+from pxpyfactory.io_utils import get_path, file_exists, file_read, get_file_info, file_append
+from pxpyfactory.utils import prep_list_from_string, update_metadata, metadata_add, get_first_notnull, valid_value, is_list_empty, alert_missing_mandatory, serialize_to_px_format, get_time_formatted, same_value, print_filter
 # import pprint
 
 class PXDataProduct:
     def __init__(self, main_app, dp_row):
         self.main_app = main_app
 
+        self.hashed_params   = hashlib.sha256(dp_row.to_string().encode()).hexdigest() # Store hashed parameters to detect changes in input files
         self.table_ref       = 'NAV_' + dp_row['TABLE_NO'] # Nav uses NAV_ as a prefix for table numbers
         self.table_name      = dp_row['TITLE']
         self.table_sep       = dp_row['SEP'] # Separator used in .csv-file (used for reading input file)
-        print(f"Data product separator set to: '{self.table_sep}'")
         self.subject_code    = dp_row['LEVEL_1_FOLDER'] # + '\\' + dp_row['LEVEL_2_FOLDER'] 
         self.subject_area    = dp_row['LEVEL_1'] # + '\\' + dp_row['LEVEL_2']
 
@@ -32,13 +32,18 @@ class PXDataProduct:
 
         self.list_of_lines   = [] # Final list of lines to be written to .px file
 
-
+    # _____________________________________________________________________________
     def make_px(self):
-        if file_exists(self.table_path):
-            print(f"\n{self.table_ref} {self.table_name} - Start processing data product / table")
-        else:
-            print(f"\nWARNING: {self.table_ref} {self.table_name} - No data found. Skipping this data product / table.")
+        print_filter(f"{self.table_ref} {self.table_name}", 1)
+
+        if not file_exists(self.table_path):
+            print_filter(f"WARNING: No data found. Skipping this data product / table.", 0)
             return False
+        
+        if not self._input_changed():
+            print_filter(f"INFO: No changes in input files since last run. Skipping this data product / table.", 0)
+            return False
+        
 
         self.table_data = file_read(self.table_path, sep=self.table_sep) # Fetch data table from .parquet or .csv file
         self._set_columns() # Set stub, heading and data columns if not set, based on data table content
@@ -58,14 +63,62 @@ class PXDataProduct:
         self.list_of_lines = serialize_to_px_format(metadata, data_lines)
 
         return True
+    # _____________________________________________________________________________
+    # Log production of current px file to production_log.jsonl
+    def log_file_production(self):
+        size, time = get_file_info(self.table_path)
+        meta_size, meta_time = get_file_info(self.table_meta_path)
+        current_entry_dict = {
+            'table_ref': self.table_ref,
+            'timestamp': get_time_formatted(),
+            'hashed_params': self.hashed_params,
+            'file_size': size if size is not None else '-',
+            'mod_time': get_time_formatted(time) if time is not None else '-',
+            'meta_file_size': meta_size if meta_size is not None else '-',
+            'meta_mod_time': get_time_formatted(meta_time) if meta_time is not None else '-'
+        }
+        if file_append(self.main_app.production_log_filepath, current_entry_dict):
+            # File append successful
+            return True
+        else:
+            return False
+        
+    # _____________________________________________________________________________
+    # Compare current input to production, with input to latest production of the same table
+    def _input_changed(self):
+        prod_log = self.main_app.production_log
+        try:
+            latest_entry = prod_log[prod_log['table_ref'] == self.table_ref].sort_values('timestamp').iloc[-1]
+        except Exception as e:
+            print_filter(f"No prior production logged.", 2)
+            return True
+        output_str = (f"Latest production was {latest_entry} . First input update:")
+        size, time = get_file_info(self.table_path)
+        meta_size, meta_time = get_file_info(self.table_meta_path)
+        if not same_value(latest_entry['hashed_params'], self.hashed_params):
+            print_filter(f"{output_str} hashed_params: '{latest_entry['hashed_params']}' -> '{self.hashed_params}'", 2)
+            return True
+        if not same_value(latest_entry['file_size'], size):
+            print_filter(f"{output_str} file_size: '{latest_entry['file_size']}' -> '{size}'", 2)
+            return True
+        if not same_value(latest_entry['mod_time'], time):
+            print_filter(f"{output_str} mod_time: '{latest_entry['mod_time']}' -> '{time}'", 2)
+            return True
+        if not same_value(latest_entry['meta_file_size'], meta_size):
+            print_filter(f"{output_str} meta_file_size: '{latest_entry['meta_file_size']}' -> '{meta_size}'", 2)
+            return True
+        if not same_value(latest_entry['meta_mod_time'], meta_time):
+            print_filter(f"{output_str} meta_mod_time : '{latest_entry['meta_mod_time']}' -> '{meta_time}'", 2)
+            return True
 
-
+        return False
+    # _____________________________________________________________________________
     # Update stub_list, heading_list and data_list based on content of table_data if any of the lists are empty
     def _set_columns(self):
         remaining_columns = self.table_data.columns.tolist()
-        print(f"  All columns in table: {remaining_columns}")
+        print_filter(f"  All columns in table: {remaining_columns}", 2)
 
-        print(f"  Initial data_list: {self.data_list}")
+        print_filter(f"  Initial data_list: {self.data_list}", 2)
         if is_list_empty(self.data_list):
             uniqe_values_in_columns = {}
             for column in remaining_columns:
@@ -83,9 +136,9 @@ class PXDataProduct:
             for column in self.data_list:
                 if column in remaining_columns:
                     remaining_columns.remove(column)
-        print(f"  Updated data_list: {self.data_list}")
+        print_filter(f"  Updated data_list: {self.data_list}", 2)
 
-        print(f"  Initial stub_list: {self.stub_list}")
+        print_filter(f"  Initial stub_list: {self.stub_list}", 2)
         if is_list_empty(self.stub_list):
             for column in remaining_columns:
                 if column not in self.heading_list:
@@ -96,18 +149,19 @@ class PXDataProduct:
             for column in self.stub_list:
                 if column in remaining_columns:
                     remaining_columns.remove(column)
-        print(f"  Updated stub_list: {self.stub_list}")
+        print_filter(f"  Updated stub_list: {self.stub_list}", 2)
 
-        print(f"  Initial heading_list: {self.heading_list}")
+        print_filter(f"  Initial heading_list: {self.heading_list}", 2)
         if is_list_empty(self.heading_list):
             self.heading_list = []
         # Add all remaining columns must be headings:
         for column in remaining_columns:
             if column not in self.heading_list:
                 self.heading_list.append(column)
-        print(f"  Updated heading_list: {self.heading_list}")
+        print_filter(f"  Updated heading_list: {self.heading_list}", 2)
 
 
+    # _____________________________________________________________________________
     # Create a dictionary with unique values for each column
     # + ensure correct formatting of content
     def _prepare_table_data(self):
@@ -124,6 +178,7 @@ class PXDataProduct:
                 values_dict[column] = sorted(pd.unique(self.table_data[column]))
         return values_dict
 
+    # _____________________________________________________________________________
     # Create a dictionary with manual metadata updates based on data product info (from Excel sheet 'dataprodukter')
     def _get_manual_metadata_updates(self, values_dict):
         # Prepare dictionary with px-parameters from input files:
@@ -149,7 +204,7 @@ class PXDataProduct:
             else:
                 units_value = self.units_list[0]
             manual_metadata_updates_dict['UNITS("' + data_col + '")'] = units_value
-            manual_metadata_updates_dict['LAST-UPDATED("' + data_col + '")'] = datetime.now().strftime("%Y%m%d %H:%M") # current time on px-format
+            manual_metadata_updates_dict['LAST-UPDATED("' + data_col + '")'] = get_time_formatted() # current time on px-format
             # If needed, more data-column specific px-parameters can be added. Value can be based on 'spesific_value' and implementet a few lines lower.
             # manual_metadata_updates_dict['STOCKFA("' + data_col + '")'] = 
             # manual_metadata_updates_dict['CFPRICES("' + data_col + '")'] = 
@@ -162,6 +217,7 @@ class PXDataProduct:
 
         return manual_metadata_updates_dict
 
+    # _____________________________________________________________________________
     # Add metadata from spesific .csv-file, and prepare final metadata values for this data product.
     # Value used in px-file are selected from the highest priority non-null value from these three columns in metadata df: spesific_value, manual_value, default_value
     def _prepare_metadata_values(self, metadata_prep):
@@ -170,7 +226,7 @@ class PXDataProduct:
         if file_exists(self.table_meta_path):
             table_meta = file_read(self.table_meta_path, sep=self.table_sep)
             if {'KEYWORD', 'VALUE'}.issubset(table_meta.columns):
-                print("Valid file for spesific metadata used.")
+                print_filter("Valid file for spesific metadata used.", 2)
             else:
                 table_meta = pd.DataFrame(columns=['KEYWORD', 'VALUE'])
         else:
@@ -188,6 +244,7 @@ class PXDataProduct:
 
         return metadata_prep, fill_value
 
+    # _____________________________________________________________________________
     # Create the data content lines to the px-file.
     # To get the correct format all possible combinations of stub and heading values must be created, and merged with the data table.
     # Missing values are filled with the fill_value from metadata.
@@ -201,15 +258,16 @@ class PXDataProduct:
         data_lines = [' '.join(map(str, row)) for row in data_pivot.values] # Convert each row to a space-separated string
 
         return data_lines
-    
+
+# _____________________________________________________________________________
     def _get_lines_of_data_from_table(self, values_dict, fill_value):
         # 1. Generate all possible combinations in the correct order
         stub_and_headings = self.stub_list + self.heading_list
         all_combinations_of_stub_heading = pd.DataFrame(list(product(*[values_dict[axis] for axis in stub_and_headings])), columns=stub_and_headings)
-        # print(all_combinations_of_stub_heading)
+        print_filter(all_combinations_of_stub_heading, 3)
         # 2. Merge with actual data
         expanded_table_data = pd.merge(all_combinations_of_stub_heading, self.table_data, on=stub_and_headings, how='left').fillna(fill_value)
-        # print(expanded_table_data)
+        print_filter(expanded_table_data, 3)
 
         data_pivot = expanded_table_data.pivot_table(index=self.stub_list, columns=self.heading_list, values=self.data_list, aggfunc='first')
         data_lines = [' '.join(map(str, row)) for row in data_pivot.values] # Convert each row to a space-separated string
