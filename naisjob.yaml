@@ -8,7 +8,4 @@ metadata:
 spec:
   image: "{{ image }}"
   schedule: "*/5 8-18 * * 1-5"
-  gcp:
-    buckets:
-    - cascadingDelete: false
-      name: pxweb2-api-nais-test
+  

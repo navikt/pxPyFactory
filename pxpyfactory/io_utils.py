@@ -36,9 +36,9 @@ def write_gcs_file(destination_blob_name, content):
 
 #########################################################################
 
-def get_path(*path_parts):
+def get_path(path_parts):
     # return os.path.abspath(os.path.join(*path_parts))
-    return "/".join(*path_parts)
+    return "/".join(path_parts)
 
 def file_exists(file_path):
     try:

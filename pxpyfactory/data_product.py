@@ -26,9 +26,9 @@ class PXDataProduct:
         self.contents_var    = dp_row['CONTENTS']
         self.contvariable    = 'STAT_VAR' # data_list[0] # Column name for contents variable - can probably be anything..
 
-        self.table_path      = get_path(self.main_app.input_path, (self.table_ref + '.csv'))
-        self.table_meta_path = get_path(self.main_app.input_path, (self.table_ref + '_meta.csv'))
-        self.px_output_path  = get_path(self.main_app.output_path, dp_row['LEVEL_1_FOLDER'], dp_row['LEVEL_2_FOLDER'], (self.table_ref + '.px'))
+        self.table_path      = get_path([self.main_app.input_path, self.table_ref + '.csv'])
+        self.table_meta_path = get_path([self.main_app.input_path, self.table_ref + '_meta.csv'])
+        self.px_output_path  = get_path([self.main_app.output_path, dp_row['LEVEL_1_FOLDER'], dp_row['LEVEL_2_FOLDER'], self.table_ref + '.px'])
 
         self.list_of_lines   = [] # Final list of lines to be written to .px file
 

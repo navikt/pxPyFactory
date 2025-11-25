@@ -5,16 +5,17 @@ WORKDIR /pyfactory
 RUN useradd -m -d /pyfactory/ -u 1069 -s /bin/bash pyfactory && \
     chown -R pyfactory:pyfactory /pyfactory/
 COPY requirements.txt .
-ENV PIP_TARGET=/pyfactory/.local/lib/python3.14/site-packages
+ENV PIP_TARGET=/pyfactory/lib/python3.14/site-packages
 ENV PYTHONPATH=$PIP_TARGET
 RUN pip3 install --no-cache-dir -r requirements.txt
 
 
 FROM europe-north1-docker.pkg.dev/cgr-nav/pull-through/nav.no/python:3.14
-COPY pxpyfactory .
+COPY pxpyfactory pxpyfactory
 COPY run.py .
-COPY --from=dev /pyfactory/.local/lib/python3.14/site-packages/ /pyfactory/.local/lib/python3.14/site-packages/
+COPY --from=dev /pyfactory/lib/python3.14/site-packages/ /pyfactory/lib/python3.14/site-packages/
 COPY --from=dev /etc/passwd /etc/passwd
 USER pyfactory
+ENV PYTHONPATH=/pyfactory/lib/python3.14/site-packages
 
 ENTRYPOINT ["python", "run.py"]

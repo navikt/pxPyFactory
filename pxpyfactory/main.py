@@ -10,8 +10,8 @@ class PXMain:
         # script_path = set_script_path()
         self.input_path              = 'input' # Define input path relative to script location
         self.output_path             = 'px'  # Define output path relative to script location
-        self.common_meta_filepath    = get_path(self.input_path, 'common_meta.xlsx') # Define path to common metadata file
-        self.production_log_filepath = get_path(self.input_path, 'production_log.jsonl') # Define path to common metadata file
+        self.common_meta_filepath    = get_path([self.input_path, 'common_meta.xlsx']) # Define path to common metadata file
+        self.production_log_filepath = get_path([self.input_path, 'production_log.jsonl']) # Define path to common metadata file
 
     def run(self):
         data_products_df    = prepare_data_products(self.common_meta_filepath) # Get and prepare data products for px file generation from Excel-sheet.
