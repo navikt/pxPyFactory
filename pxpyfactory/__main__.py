@@ -1,10 +1,10 @@
 from .main import PXMain
 
 def go():
-    print('=' * 80) # print separator line
+    print('-- start --')
     px_main = PXMain()
     px_main.run()
-    print('')
+    print('-- stop  --')
 
 if __name__ == "__main__":
     go()

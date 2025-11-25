@@ -1,0 +1,14 @@
+apiVersion: nais.io/v1
+kind: Naisjob
+metadata:
+  labels:
+    team: dvh-analytisk-plattform
+  name: pxpyfactory-test
+  namespace: dvh-analytisk-plattform
+spec:
+  image: "{{ image }}"
+  schedule: "*/5 8-18 * * 1-5"
+  gcp:
+    buckets:
+    - cascadingDelete: false
+      name: pxweb2-api-nais-test

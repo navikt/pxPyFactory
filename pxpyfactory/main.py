@@ -1,15 +1,15 @@
 import pandas as pd
 from pxpyfactory.data_product import PXDataProduct
 from pxpyfactory.folder_alias import update_folder_structure
-from pxpyfactory.io_utils import set_script_path, get_path, file_read, write_px
+from pxpyfactory.io_utils import get_path, file_read, write_px
 from pxpyfactory.utils import prepare_data_products, prepare_metadata_base, print_filter
 
 class PXMain:
     def __init__(self):
         # Set folders and file-paths
-        script_path = set_script_path()
-        self.input_path              = get_path(script_path, '..', 'input') # Define input path relative to script location
-        self.output_path             = get_path(script_path, '..', 'output')  # Define output path relative to script location
+        # script_path = set_script_path()
+        self.input_path              = 'input' # Define input path relative to script location
+        self.output_path             = 'px'  # Define output path relative to script location
         self.common_meta_filepath    = get_path(self.input_path, 'common_meta.xlsx') # Define path to common metadata file
         self.production_log_filepath = get_path(self.input_path, 'production_log.jsonl') # Define path to common metadata file
 

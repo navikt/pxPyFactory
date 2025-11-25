@@ -27,11 +27,11 @@ def prepare_data_products(common_meta_filepath):
     duplicates_df = data_products[duplicates_mask].copy() # Dataframe with duplicate table numbers
     data_products = data_products[~duplicates_mask].copy() # Dataframe with unique table numbers (duplicates removed)
 
-    print('\nData products / tables to create px-files from:')
-    print(data_products[['LEVEL_1_FOLDER', 'LEVEL_2_FOLDER', 'TABLE_NO', 'TITLE', 'STUB', 'HEADING', 'DATA', 'UNITS']])
+    print_filter('Data products / tables to create px-files from:', 0)
+    print_filter(data_products[['LEVEL_1_FOLDER', 'LEVEL_2_FOLDER', 'TABLE_NO', 'TITLE', 'STUB', 'HEADING', 'DATA', 'UNITS']], 0)
     if duplicates_df.shape[0] > 0:
-        print('--- Duplicated table numbers (will be skipped):')
-        print(duplicates_df)
+        print_filter('--- Duplicated table numbers (will be skipped):', 0)
+        print_filter(duplicates_df, 0)
 
     return data_products
 
@@ -193,5 +193,5 @@ def is_list_empty(check_list):
         return False
 # _____________________________________________________________________________
 def print_filter(output, priority_level=0):
-    if priority_level <= 1:
+    if priority_level <= 3:
         print(output)

@@ -1,7 +1,7 @@
 import pandas as pd
 import hashlib
 from itertools import product
-from pxpyfactory.io_utils import get_path, file_exists, file_read, get_file_info, file_append
+from pxpyfactory.io_utils import get_path, file_exists, file_read, get_file_info, write_log
 from pxpyfactory.utils import prep_list_from_string, update_metadata, metadata_add, get_first_notnull, valid_value, is_list_empty, alert_missing_mandatory, serialize_to_px_format, get_time_formatted, same_value, print_filter
 # import pprint
 
@@ -37,11 +37,11 @@ class PXDataProduct:
         print_filter(f"{self.table_ref} {self.table_name}", 1)
 
         if not file_exists(self.table_path):
-            print_filter(f"WARNING: No data found. Skipping this data product / table.", 0)
+            print_filter(f"WARNING: No data found. Skipping this data product / table.", 1)
             return False
         
         if not self._input_changed():
-            print_filter(f"INFO: No changes in input files since last run. Skipping this data product / table.", 0)
+            print_filter(f"INFO: No changes in input files since last run. Skipping this data product / table.", 1)
             return False
         
 
@@ -77,8 +77,10 @@ class PXDataProduct:
             'meta_file_size': meta_size if meta_size is not None else '-',
             'meta_mod_time': get_time_formatted(meta_time) if meta_time is not None else '-'
         }
-        if file_append(self.main_app.production_log_filepath, current_entry_dict):
-            # File append successful
+        self.production_log.loc[len(self.production_log)] = current_entry_dict
+        # df = pd.concat([df, pd.DataFrame([current_entry_dict])], ignore_index=True) # alternative way to append a row to dataframe
+        if write_log(self.production_log_filepath, self.production_log):
+            # File append successful+
             return True
         else:
             return False
