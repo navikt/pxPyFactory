@@ -140,6 +140,9 @@ def valid_value_or_none(value, full=False):
         else:
             return value
     elif isinstance(value, datetime):
+        # Remove timezone info to allow comparison with naive datetimes
+        if value.tzinfo is not None:
+            value = value.replace(tzinfo=None)
         time_from = datetime(2020, 1, 1) # earliest valid time
         time_to = datetime(2099, 12, 31) # latest valid time
         if time_from <= value <= time_to:

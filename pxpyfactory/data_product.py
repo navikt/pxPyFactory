@@ -77,9 +77,9 @@ class PXDataProduct:
             'meta_file_size': meta_size if meta_size is not None else '-',
             'meta_mod_time': get_time_formatted(meta_time) if meta_time is not None else '-'
         }
-        self.production_log.loc[len(self.production_log)] = current_entry_dict
+        self.main_app.production_log.loc[len(self.main_app.production_log)] = current_entry_dict
         # df = pd.concat([df, pd.DataFrame([current_entry_dict])], ignore_index=True) # alternative way to append a row to dataframe
-        if write_log(self.production_log_filepath, self.production_log):
+        if write_log(self.main_app.production_log_filepath, self.main_app.production_log):
             # File append successful+
             return True
         else:
@@ -94,7 +94,7 @@ class PXDataProduct:
         except Exception as e:
             print_filter(f"No prior production logged.", 2)
             return True
-        output_str = (f"Latest production was {latest_entry} . First input update:")
+        output_str = (f"Latest production was\n{latest_entry}\nFirst input update:")
         size, time = get_file_info(self.table_path)
         meta_size, meta_time = get_file_info(self.table_meta_path)
         if not same_value(latest_entry['hashed_params'], self.hashed_params):

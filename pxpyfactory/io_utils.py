@@ -1,43 +1,17 @@
+from google.cloud import storage # Imports the Google Cloud client library
 import pandas as pd
+import io
 # import pprint
 # import os
-import io
-import json
+# import json
 from datetime import datetime
-#########################################################################
-# Imports the Google Cloud client library
-from google.cloud import storage
 
-# Instantiates a client
-storage_client = storage.Client()
-# The name for the new bucket
-bucket_name = "pxweb2-api-nais-test"
+storage_client = storage.Client() # Instantiates a client
+bucket_name = "pxweb2-api-nais-test" # The name for the new bucket
 bucket = storage_client.bucket(bucket_name)
 
-def read_gcs_file(source_blob_name):
-    """Reads a file from Google Cloud Storage and returns its content as a string."""
-    try:
-        blob = bucket.blob(source_blob_name)
-        content = blob.download_as_text()
-        return content
-    except Exception as e:
-        print(f"Error reading file {source_blob_name} from bucket {bucket_name}: {e}")
-        return None
-
-def write_gcs_file(destination_blob_name, content):
-    """Reads a file from Google Cloud Storage and returns its content as a string."""
-    try:
-        blob = bucket.blob(destination_blob_name)
-        blob.upload_from_string(content)
-        return True
-    except Exception as e:
-        print(f"Error writing file {destination_blob_name} to bucket {bucket_name}: {e}")
-        return None
-
-#########################################################################
-
+# _____________________________________________________________________________
 def get_path(path_parts):
-    # return os.path.abspath(os.path.join(*path_parts))
     return "/".join(path_parts)
 
 def file_exists(file_path):
@@ -46,7 +20,29 @@ def file_exists(file_path):
     except Exception as e:
         print(f"Error checking file existence {file_path}: {e}")
         return False
+# _____________________________________________________________________________
+# Reads a file from Google Cloud Storage and returns its content as a string.
+def read_gcs_file(source_blob_name, download_as_bytes=False):
+    try:
+        blob = bucket.blob(source_blob_name)
+        if download_as_bytes:
+          content = blob.download_as_bytes()
+        else:
+          content = blob.download_as_text()
+        return content
+    except Exception as e:
+        print(f"Error reading file {source_blob_name} from bucket {bucket_name}: {e}")
+        return None
 
+# _____________________________________________________________________________
+def write_gcs_file(destination_blob_name, content):
+    try:
+        blob = bucket.blob(str(destination_blob_name))
+        blob.upload_from_string(str(content))
+        return True
+    except Exception as e:
+        print(f"Error writing file {destination_blob_name} to bucket {bucket_name}: {e}")
+        return None
 # _____________________________________________________________________________
 # Reads content from Excel or CSV files and returns a DataFrame
 # If the file cannot be read, it returns an empty DataFrame and prints an error message
@@ -55,13 +51,15 @@ def file_read(file_path, sheet_name='Ark1', sep=';', header=0, clean=True):
     if not file_exists(file_path):
         print(f"File not found: {file_path}")
         return df
-    content = read_gcs_file(file_path)
     try:
         if file_path.endswith('.xlsx'):
-            df = pd.read_excel(io.StringIO(content), sheet_name=sheet_name, header=header)
+            content = read_gcs_file(file_path, download_as_bytes=True)
+            df = pd.read_excel(io.BytesIO(content), sheet_name=sheet_name, header=header)
         elif file_path.endswith('.csv'):
+            content = read_gcs_file(file_path)
             df = pd.read_csv(io.StringIO(content), sep=sep, header=header)
         elif file_path.endswith('.jsonl'):
+            content = read_gcs_file(file_path)
             df = pd.read_json(io.StringIO(content), lines=True)
         else:
             raise ValueError("Unsupported file type")
@@ -71,17 +69,6 @@ def file_read(file_path, sheet_name='Ark1', sep=';', header=0, clean=True):
     except Exception as e:
         print(f"Error reading file {file_path}: {e}")
         return df
-
-# _____________________________________________________________________________
-# Reads content from Excel or CSV files and returns a DataFrame
-# If the file cannot be read, it returns an empty DataFrame and prints an error message
-def write_log(file_path, content_df):
-        # if file_path.endswith('.jsonl'):
-        #     with open(file_path, "a") as f:
-        #         f.write(json.dumps(entry_dict) + "\n")
-        #     success = True
-    return write_gcs_file(file_path, content_df.to_json(orient='records', lines=True))
-
 # _____________________________________________________________________________
 # 
 def get_file_info(file_path):
@@ -95,21 +82,13 @@ def get_file_info(file_path):
     else:
         return None, None
 # _____________________________________________________________________________
+def write_log(file_path, content_df):
+    return write_gcs_file(file_path, content_df.to_json(orient='records', lines=True))
+# _____________________________________________________________________________
 # Create folder from path if it does not exist, and write alias file in it
 def write_folder_alias(alias, path, file_path):
 
     write_gcs_file(file_path, alias)
-
-    # try:
-    #     path.mkdir(parents=True, exist_ok=True)
-    # except Exception as e:
-    #     print(f"Error creating folder {path}: {e}")
-    # try:
-    #     with open(file_path, 'w', encoding='utf-8') as f:
-    #         f.write(str(alias))
-    # except Exception as e:
-    #     print(f"Error writing alias file {file_path}: {e}")
-
 # _____________________________________________________________________________
 # Save a list of lines to a .px file
 # Return True if successful writing to file, False otherwise
@@ -123,12 +102,4 @@ def write_px(list_of_lines, file_path):
     else:
         write_gcs_file(file_path, "\n".join(list_of_lines))
         return True
-    
-        # try:
-        #     with open(file_path, "w", encoding="utf-8") as f:
-        #         for line in list_of_lines:
-        #             f.write(line + "\n")
-        #     return True
-        # except Exception as e:
-        #     print(f"Error writing PX file {file_path}: {e}")
-        #     return False
+# _____________________________________________________________________________
