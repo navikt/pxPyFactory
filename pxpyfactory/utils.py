@@ -6,17 +6,10 @@ from pxpyfactory.io_utils import file_read
 def prepare_data_products(common_meta_filepath):
     data_products = file_read(common_meta_filepath, sheet_name='dataprodukter') # Get the overview of all data products
     data_products = data_products.map(lambda x: str(x) if pd.notnull(x) else None) # Force content in excel sheet to just strings for easier use (None for empty cells)
-    
-    # Debug: print available columns
-    print(f"Available columns: {data_products.columns.tolist()}")
-    
     # Column referances in the data_products sheet
     data_products.rename(columns={'BYGG_NAA'      : 'BUILD_NOW'      }, inplace=True)
-    data_products.rename(columns={'BYGG_NA'       : 'BUILD_NOW'      }, inplace=True)  # Alternative if Å was converted
     data_products.rename(columns={'OMRAADE_MAPPE' : 'LEVEL_1_FOLDER' }, inplace=True)
-    data_products.rename(columns={'OMRADE_MAPPE'  : 'LEVEL_1_FOLDER' }, inplace=True)  # Alternative if Å was converted
     data_products.rename(columns={'OMRAADE'       : 'LEVEL_1'        }, inplace=True) # område oversettes noen ganger i Nav til field
-    data_products.rename(columns={'OMRADE'        : 'LEVEL_1'        }, inplace=True)  # Alternative if Å was converted
     data_products.rename(columns={'TEMA_MAPPE'    : 'LEVEL_2_FOLDER' }, inplace=True)
     data_products.rename(columns={'TEMA'          : 'LEVEL_2'        }, inplace=True) # tema oversettes ofte i Nav til theme
     data_products.rename(columns={'NUMMER'        : 'TABLE_NO'       }, inplace=True)
