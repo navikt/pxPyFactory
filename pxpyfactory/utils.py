@@ -1,6 +1,7 @@
+import sys
 import pandas as pd
 from datetime import datetime
-from pxpyfactory.io_utils import file_read
+from pxpyfactory.io_utils import file_read, write_folder_alias
 
 # _____________________________________________________________________________
 def prepare_data_products(common_meta_filepath):
@@ -8,11 +9,9 @@ def prepare_data_products(common_meta_filepath):
     data_products = data_products.map(lambda x: str(x) if pd.notnull(x) else None) # Force content in excel sheet to just strings for easier use (None for empty cells)
     # Column referances in the data_products sheet
     data_products.rename(columns={'BYGG_NAA'      : 'BUILD_NOW'      }, inplace=True)
-    data_products.rename(columns={'OMRAADE_MAPPE' : 'LEVEL_1_FOLDER' }, inplace=True)
     data_products.rename(columns={'OMRAADE'       : 'LEVEL_1'        }, inplace=True) # område oversettes noen ganger i Nav til field
-    data_products.rename(columns={'TEMA_MAPPE'    : 'LEVEL_2_FOLDER' }, inplace=True)
     data_products.rename(columns={'TEMA'          : 'LEVEL_2'        }, inplace=True) # tema oversettes ofte i Nav til theme
-    data_products.rename(columns={'NUMMER'        : 'TABLE_NO'       }, inplace=True)
+    data_products.rename(columns={'NUMMER'        : 'TABLE_REF'       }, inplace=True)
     data_products.rename(columns={'TITTEL'        : 'TITLE'          }, inplace=True)
     data_products.rename(columns={'BESKRIVELSE'   : 'CONTENTS'       }, inplace=True)
     # data_products.rename(columns={'STUB'          : 'STUB'           }, inplace=True)
@@ -21,14 +20,27 @@ def prepare_data_products(common_meta_filepath):
     # data_products.rename(columns={'UNITS'         : 'UNITS'          }, inplace=True)
     # data_products.rename(columns={'SEP'           : 'SEP'            }, inplace=True)
 
-    data_products = data_products[data_products['BUILD_NOW'] == 'x'] # .isin(['x'])] # Filter to only include tables tagged in Build now column
 
-    duplicates_mask = data_products.duplicated(subset=['TABLE_NO'], keep='first') # List of dublicate table numbers
+    # Filter based on command line arguments
+    input_arg = sys.argv[1] if len(sys.argv) > 1 else None
+    print(f"Args: {input_arg}")
+    if input_arg == None: # No arguments given - build only tables where input has changed
+        data_products['FORCE_BUILD'] = None
+    elif input_arg == 'all': # Build all tables, even if input has not changed
+        data_products['FORCE_BUILD'] = True
+    else: # Build only table specified
+        data_products['FORCE_BUILD'] = False
+        data_products.loc[data_products['TABLE_REF'] == input_arg, 'FORCE_BUILD'] = True
+
+    # Remove data products where BUILD_NOW is not set to 'x' in Excel sheet and FORCE_BUILD is not True or None
+    data_products = data_products[(data_products['BUILD_NOW'] == 'x') & (data_products['FORCE_BUILD'] != False)]
+
+    duplicates_mask = data_products.duplicated(subset=['TABLE_REF'], keep='first') # List of dublicate table numbers
     duplicates_df = data_products[duplicates_mask].copy() # Dataframe with duplicate table numbers
     data_products = data_products[~duplicates_mask].copy() # Dataframe with unique table numbers (duplicates removed)
 
     print_filter('Data products / tables to create px-files from:', 0)
-    print_filter(data_products[['LEVEL_1_FOLDER', 'LEVEL_2_FOLDER', 'TABLE_NO', 'TITLE', 'STUB', 'HEADING', 'DATA', 'UNITS']], 0)
+    print_filter(data_products[['LEVEL_1', 'LEVEL_2', 'TABLE_REF', 'TITLE', 'STUB', 'HEADING', 'DATA', 'UNITS']], 0)
     if duplicates_df.shape[0] > 0:
         print_filter('--- Duplicated table numbers (will be skipped):', 0)
         print_filter(duplicates_df, 0)
@@ -45,6 +57,42 @@ def prepare_metadata_base(common_meta_filepath):
     metadata_base = metadata_add(meta_default, meta_manual, 'MANUAL_VALUE') # Adds the column 'manual_value' to 'meta_default'. The value is from 'meta_manual' (match on keyword)
 
     return metadata_base
+# _____________________________________________________________________________
+def prepare_alias(common_meta_filepath):
+    # Prepare alias folder names from Excel-sheets - common for all data products
+    alias = file_read(common_meta_filepath, sheet_name='folder-alias')
+    alias = alias[['CODE','NO','EN']] # Keep only relevant columns
+    alias['NO'] = alias['NO'].where(alias['NO'].apply(valid_value), alias['EN']) # Copy EN to NO where NO is invalid
+    alias['EN'] = alias['EN'].where(alias['EN'].apply(valid_value), alias['NO']) # Copy NO to EN where EN is invalid
+    alias = alias[alias['CODE'].apply(valid_value) & alias['NO'].apply(valid_value)] # Keep only rows where both CODE and NO are valid
+
+    duplicates_mask = alias.duplicated(subset=['CODE'], keep='first') # List of dublicate table numbers
+    # duplicates_df = alias[duplicates_mask].copy() # Dataframe with duplicate table numbers
+    alias = alias[~duplicates_mask].copy() # Dataframe with unique table numbers (duplicates removed)
+    return alias
+# _____________________________________________________________________________
+# Create folder structure from data_products dataframe
+# Create the folder structure to put the px-files in
+def update_folder_structure(data_products_df, alias_df, output_path):
+    path_list = []
+    languages = ['no', 'en']
+    for _, row in data_products_df.iterrows():
+        level1_path = output_path + '/' + str(row['LEVEL_1']).replace('/', '')
+        level2_path = level1_path + '/' + str(row['LEVEL_2']).replace('/', '')
+
+        if level1_path not in path_list:
+            path_list.append(level1_path)
+        if level2_path not in path_list:
+            path_list.append(level2_path)
+
+    for path in path_list:
+        leaf = path.rsplit('/', 1)[-1]
+        for language in languages:
+            alias_value = leaf
+            if leaf in alias_df['CODE'].values:
+                alias_value = alias_df.loc[alias_df['CODE'] == leaf, language.upper()].iloc[0]
+            file_path = path + '/' + 'alias_' + language + '.txt'
+            write_folder_alias(file_path, alias_value)
 # _____________________________________________________________________________
 # For each row in metadata_base, if the 'keyword' is found in amendment_df,
 # insert the value from amendment_df to the new_column_name-column in metadata.
@@ -143,6 +191,7 @@ def valid_value_or_none(value, full=False):
         # Remove timezone info to allow comparison with naive datetimes
         if value.tzinfo is not None:
             value = value.replace(tzinfo=None)
+        # print(f"Datetime value detected: {value}")
         time_from = datetime(2020, 1, 1) # earliest valid time
         time_to = datetime(2099, 12, 31) # latest valid time
         if time_from <= value <= time_to:

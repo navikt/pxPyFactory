@@ -1,8 +1,7 @@
 import pandas as pd
 from pxpyfactory.data_product import PXDataProduct
-from pxpyfactory.folder_alias import update_folder_structure
 from pxpyfactory.io_utils import get_path, file_read, write_px
-from pxpyfactory.utils import prepare_data_products, prepare_metadata_base, print_filter
+from pxpyfactory.utils import prepare_data_products, prepare_metadata_base, prepare_alias, update_folder_structure, print_filter
 
 class PXMain:
     def __init__(self):
@@ -14,14 +13,13 @@ class PXMain:
         self.production_log_filepath = get_path([self.input_path, 'production_log.jsonl']) # Define path to common metadata file
 
     def run(self):
+        self.alias_df       = prepare_alias(self.common_meta_filepath) # Get and prepare alias
         data_products_df    = prepare_data_products(self.common_meta_filepath) # Get and prepare data products for px file generation from Excel-sheet.
         self.metadata_base  = prepare_metadata_base(self.common_meta_filepath) # Get and prepare metadata_base
         self.production_log = file_read(self.production_log_filepath, clean=False) # Read production log file
-        update_folder_structure(data_products_df, self.output_path) # Create folder structure from data_products dataframe
-        
-        # TEST TEMP
-        print_filter(self.production_log, 3)
-        
+
+        update_folder_structure(data_products_df, self.alias_df, self.output_path) # Create folder structure from data_products dataframe
+        px_files_written = 0
         # Process each data product:
         for i, row in data_products_df.iterrows():
             print_filter(f"\n--- Start processing data product / table from orderline: {i+2} ---", 1)
@@ -32,4 +30,6 @@ class PXMain:
                     # If writing px file to disk is successful, log the production
                     if px_data_product.log_file_production():
                         # If logging is successful, print confirmation
-                        print_filter(f"PX file successfully written: {px_data_product.px_output_path}", 0)
+                        print_filter(f"PX file successfully written: {px_data_product.px_output_path}", 1)
+                        px_files_written += 1
+        print_filter(f"\n--- PX file generation completed. Total PX files written: {px_files_written} ---", 0)

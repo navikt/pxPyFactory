@@ -4,10 +4,11 @@ import io
 # import pprint
 # import os
 # import json
-from datetime import datetime
+# from datetime import datetime
 
 storage_client = storage.Client() # Instantiates a client
 bucket_name = "pxweb2-api-nais-test" # The name for the new bucket
+# bucket_name = "pxweb2-api-nais-px" # The name for the new bucket
 bucket = storage_client.bucket(bucket_name)
 
 # _____________________________________________________________________________
@@ -35,6 +36,7 @@ def read_gcs_file(source_blob_name, download_as_bytes=False):
         return None
 
 # _____________________________________________________________________________
+# Write content to a file in Google Cloud Storage. If file dont exist, it is created.
 def write_gcs_file(destination_blob_name, content):
     try:
         blob = bucket.blob(str(destination_blob_name))
@@ -60,7 +62,7 @@ def file_read(file_path, sheet_name='Ark1', sep=';', header=0, clean=True):
             df = pd.read_csv(io.StringIO(content), sep=sep, header=header)
         elif file_path.endswith('.jsonl'):
             content = read_gcs_file(file_path)
-            df = pd.read_json(io.StringIO(content), lines=True)
+            df = pd.read_json(io.StringIO(content), lines=True, convert_dates=False)
         else:
             raise ValueError("Unsupported file type")
         if clean:
@@ -86,8 +88,7 @@ def write_log(file_path, content_df):
     return write_gcs_file(file_path, content_df.to_json(orient='records', lines=True))
 # _____________________________________________________________________________
 # Create folder from path if it does not exist, and write alias file in it
-def write_folder_alias(alias, path, file_path):
-
+def write_folder_alias(file_path, alias):
     write_gcs_file(file_path, alias)
 # _____________________________________________________________________________
 # Save a list of lines to a .px file

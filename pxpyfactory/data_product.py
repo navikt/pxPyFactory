@@ -9,14 +9,15 @@ class PXDataProduct:
     def __init__(self, main_app, dp_row):
         self.main_app = main_app
 
+        self.force_build     = dp_row.pop('FORCE_BUILD')
         self.hashed_params   = hashlib.sha256(dp_row.to_string().encode()).hexdigest() # Store hashed parameters to detect changes in input files
-        self.table_ref       = 'NAV_' + dp_row['TABLE_NO'] # Nav uses NAV_ as a prefix for table numbers
+
+        self.table_ref       = 'NAV_' + dp_row['TABLE_REF'] # Nav uses NAV_ as a prefix for table numbers
         self.table_name      = dp_row['TITLE']
         self.table_sep       = dp_row['SEP'] # Separator used in .csv-file (used for reading input file)
-        self.subject_code    = dp_row['LEVEL_1_FOLDER'] # + '\\' + dp_row['LEVEL_2_FOLDER'] 
-        self.subject_area    = dp_row['LEVEL_1'] # + '\\' + dp_row['LEVEL_2']
+        self.subject_code    = dp_row['LEVEL_1']
+        self.subject_area    = dp_row['LEVEL_1'] # todo: update to show the name of the subject area
 
-        self.stub_list       = prep_list_from_string(dp_row['STUB'])
         self.stub_list       = prep_list_from_string(dp_row['STUB'])
         self.heading_list    = prep_list_from_string(dp_row['HEADING'])
         self.data_list       = prep_list_from_string(dp_row['DATA'])
@@ -28,7 +29,7 @@ class PXDataProduct:
 
         self.table_path      = get_path([self.main_app.input_path, self.table_ref + '.csv'])
         self.table_meta_path = get_path([self.main_app.input_path, self.table_ref + '_meta.csv'])
-        self.px_output_path  = get_path([self.main_app.output_path, dp_row['LEVEL_1_FOLDER'], dp_row['LEVEL_2_FOLDER'], self.table_ref + '.px'])
+        self.px_output_path  = get_path([self.main_app.output_path, dp_row['LEVEL_1'], dp_row['LEVEL_2'], self.table_ref + '.px'])
 
         self.list_of_lines   = [] # Final list of lines to be written to .px file
 
@@ -40,11 +41,10 @@ class PXDataProduct:
             print_filter(f"WARNING: No data found. Skipping this data product / table.", 1)
             return False
         
-        if not self._input_changed():
+        if not self._input_changed() and self.force_build != True:
             print_filter(f"INFO: No changes in input files since last run. Skipping this data product / table.", 1)
             return False
         
-
         self.table_data = file_read(self.table_path, sep=self.table_sep) # Fetch data table from .parquet or .csv file
         self._set_columns() # Set stub, heading and data columns if not set, based on data table content
         values_dict = self._prepare_table_data() # Create a dictionary with unique values for each column and ensure correct formatting of content
@@ -77,8 +77,8 @@ class PXDataProduct:
             'meta_file_size': meta_size if meta_size is not None else '-',
             'meta_mod_time': get_time_formatted(meta_time) if meta_time is not None else '-'
         }
-        self.main_app.production_log.loc[len(self.main_app.production_log)] = current_entry_dict
-        # df = pd.concat([df, pd.DataFrame([current_entry_dict])], ignore_index=True) # alternative way to append a row to dataframe
+        # self.main_app.production_log.loc[len(self.main_app.production_log)] = current_entry_dict
+        self.main_app.production_log = pd.concat([self.main_app.production_log, pd.DataFrame([current_entry_dict])], ignore_index=True)
         if write_log(self.main_app.production_log_filepath, self.main_app.production_log):
             # File append successful+
             return True
@@ -196,6 +196,10 @@ class PXDataProduct:
             'SUBJECT-AREA': self.subject_area  ,
             'CONTENTS':     self.contents_var  ,
         }
+        manual_metadata_updates_dict['VALUES("' + self.contvariable + '")'] = self.data_list #_pure # Values for contents variable must be added first. Must also be in correct formatting
+        for key, value in values_dict.items():
+            manual_metadata_updates_dict['VALUES("' + key + '")'] = value
+
         # Add px-parameter for each data column:
         for index, data_col in enumerate(self.data_list):
             # If there is more data columns than units, use the first unit for the rest
@@ -212,10 +216,6 @@ class PXDataProduct:
             # manual_metadata_updates_dict['CFPRICES("' + data_col + '")'] = 
             # manual_metadata_updates_dict['DAYADJ("' + data_col + '")'] = 
             # manual_metadata_updates_dict['SEASADJ("' + data_col + '")'] = 
-
-        for key, value in values_dict.items():
-            manual_metadata_updates_dict['VALUES("' + key + '")'] = value
-        manual_metadata_updates_dict['VALUES("' + self.contvariable + '")'] = self.data_list_pure
 
         return manual_metadata_updates_dict
 
