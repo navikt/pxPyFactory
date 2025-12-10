@@ -112,7 +112,10 @@ def update_metadata(metadata, column, updates_dict, mandatory=True, order=500):
         mask = metadata['KEYWORD'] == keyword
         print(f"Updating SUBJECT_CODE to: {new_value}") if keyword == 'SUBJECT_CODE' else None
         if mask.sum() == 0: # The keyword does not exist, so we add a new row
-            new_row = pd.Series({'KEYWORD': keyword, column: new_value, 'MANDATORY': mandatory, 'TYPE': 'text', 'ORDER': order}).reindex(metadata.columns)
+            value_type = 'text'
+            if isinstance(new_value, int):
+                value_type = 'integer'
+            new_row = pd.Series({'KEYWORD': keyword, column: new_value, 'MANDATORY': mandatory, 'TYPE': value_type, 'ORDER': order}).reindex(metadata.columns)
             metadata = pd.concat([metadata, new_row.to_frame().T], ignore_index=True)
         elif mask.sum() == 1: # Only one entry found for the keyword, so we update it
             metadata.at[metadata.index[mask][0], column] = new_value
@@ -156,19 +159,26 @@ def serialize_to_px_format(metadata, data_lines):
     return list_of_lines_to_px
 
 # _____________________________________________________________________________
-def prep_list_from_string(in_string, separator=',', to_upper=True):
+def prep_list_from_string(in_string, separator=',', to_upper=True, split_part=0):
     if in_string is None:
         out_list = []
     elif isinstance(in_string, str):
-        if to_upper:
-            out_list = [sub.strip().upper() for sub in in_string.split(separator)]
-        else:
-            out_list = [sub.strip() for sub in in_string.split(separator)]
+        out_list = [_prep_list_from_string_mod(sub, to_upper, split_part) for sub in in_string.split(separator)]
     elif isinstance(in_string, (int, float)):
         out_list = [str(in_string)]
     else:
         out_list = []
     return out_list
+def _prep_list_from_string_mod(substring, to_upper, split_part):
+    if to_upper:
+        substring = substring.upper().strip()
+    if split_part is not None:
+        try:
+            substring = substring.split('#')[split_part].strip()
+        except Exception:
+            substring = None
+    return substring
+    
 # _____________________________________________________________________________
 def alert_missing_mandatory(metadata):
     mandatory_and_missing = metadata['KEYWORD'][metadata['MANDATORY'] & (metadata.apply(lambda row: valid_value(row['VALUE']), axis=1) == False)].tolist()

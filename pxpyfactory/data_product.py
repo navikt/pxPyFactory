@@ -9,29 +9,30 @@ class PXDataProduct:
     def __init__(self, main_app, dp_row):
         self.main_app = main_app
 
-        self.force_build     = dp_row.pop('FORCE_BUILD')
-        self.hashed_params   = hashlib.sha256(dp_row.to_string().encode()).hexdigest() # Store hashed parameters to detect changes in input files
+        self.force_build         = dp_row.pop('FORCE_BUILD')
+        self.hashed_params       = hashlib.sha256(dp_row.to_string().encode()).hexdigest() # Store hashed parameters to detect changes in input files
 
-        self.table_ref       = 'NAV_' + dp_row['TABLE_REF'] # Nav uses NAV_ as a prefix for table numbers
-        self.table_name      = dp_row['TITLE']
-        self.table_sep       = dp_row['SEP'] # Separator used in .csv-file (used for reading input file)
-        self.subject_code    = dp_row['LEVEL_1']
-        self.subject_area    = dp_row['LEVEL_1'] # todo: update to show the name of the subject area
+        self.table_ref           = 'NAV_' + dp_row['TABLE_REF'] # Nav uses NAV_ as a prefix for table numbers
+        self.table_name          = dp_row['TITLE']
+        self.table_sep           = dp_row['SEP'] # Separator used in .csv-file (used for reading input file)
+        self.subject_code        = dp_row['LEVEL_1']
+        self.subject_area        = dp_row['LEVEL_1'] # todo: update to show the name of the subject area
 
-        self.stub_list       = prep_list_from_string(dp_row['STUB'])
-        self.heading_list    = prep_list_from_string(dp_row['HEADING'])
-        self.data_list       = prep_list_from_string(dp_row['DATA'])
-        self.data_list_pure  = prep_list_from_string(dp_row['DATA'], to_upper=False) # keep formatting of data columns since they are used as values
-        self.units_list      = prep_list_from_string(dp_row['UNITS'])
+        self.stub_list           = prep_list_from_string(dp_row['STUB'])
+        self.heading_list        = prep_list_from_string(dp_row['HEADING'])
+        self.data_list           = prep_list_from_string(dp_row['DATA'])
+        self.data_list_pure      = prep_list_from_string(dp_row['DATA'], to_upper=False) # keep formatting of data columns since they are used as values
+        self.data_precision_list = prep_list_from_string(dp_row['DATA'], split_part=1) # get precision part only
+        self.units_list          = prep_list_from_string(dp_row['UNITS'])
 
-        self.contents_var    = dp_row['CONTENTS']
-        self.contvariable    = 'STAT_VAR' # data_list[0] # Column name for contents variable - can probably be anything..
+        self.contents_var        = dp_row['CONTENTS']
+        self.contvariable        = 'STAT_VAR' # data_list[0] # Column name for contents variable - can probably be anything..
 
-        self.table_path      = get_path([self.main_app.input_path, self.table_ref + '.csv'])
-        self.table_meta_path = get_path([self.main_app.input_path, self.table_ref + '_meta.csv'])
-        self.px_output_path  = get_path([self.main_app.output_path, dp_row['LEVEL_1'], dp_row['LEVEL_2'], self.table_ref + '.px'])
+        self.table_path          = get_path([self.main_app.input_path, self.table_ref + '.csv'])
+        self.table_meta_path     = get_path([self.main_app.input_path, self.table_ref + '_meta.csv'])
+        self.px_output_path      = get_path([self.main_app.output_path, dp_row['LEVEL_1'], dp_row['LEVEL_2'], self.table_ref + '.px'])
 
-        self.list_of_lines   = [] # Final list of lines to be written to .px file
+        self.list_of_lines       = [] # Final list of lines to be written to .px file
 
     # _____________________________________________________________________________
     def make_px(self):
@@ -209,8 +210,17 @@ class PXDataProduct:
                 units_value = self.units_list[index]
             else:
                 units_value = self.units_list[0]
+
             manual_metadata_updates_dict['UNITS("' + data_col + '")'] = units_value
             manual_metadata_updates_dict['LAST-UPDATED("' + data_col + '")'] = get_time_formatted() # current time on px-format
+
+            try:
+                data_precision = int(self.data_precision_list[index])
+            except Exception:
+                data_precision = None
+            if data_precision is not None:
+                manual_metadata_updates_dict['PRECISION("' + self.contvariable + '", "' + data_col + '")'] = data_precision
+            
             # If needed, more data-column specific px-parameters can be added. Value can be based on 'spesific_value' and implementet a few lines lower.
             # manual_metadata_updates_dict['STOCKFA("' + data_col + '")'] = 
             # manual_metadata_updates_dict['CFPRICES("' + data_col + '")'] = 
