@@ -59,7 +59,8 @@ def file_read(file_path, sheet_name='Ark1', sep=';', header=0, clean=True):
             df = pd.read_excel(io.BytesIO(content), sheet_name=sheet_name, header=header)
         elif file_path.endswith('.csv'):
             content = read_gcs_file(file_path)
-            df = pd.read_csv(io.StringIO(content), sep=sep, header=header)
+             # Use python engine if sep is None to auto-detect separator, else default engine (engine is not spesified)
+            df = pd.read_csv(io.StringIO(content), sep=sep, header=header, **({'engine': 'python'} if sep is None else {}))
         elif file_path.endswith('.jsonl'):
             content = read_gcs_file(file_path)
             df = pd.read_json(io.StringIO(content), lines=True, convert_dates=False)

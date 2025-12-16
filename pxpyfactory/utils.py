@@ -1,5 +1,6 @@
 import sys
 import pandas as pd
+import re
 from datetime import datetime
 from pxpyfactory.io_utils import file_read, write_folder_alias
 
@@ -11,7 +12,7 @@ def prepare_data_products(common_meta_filepath):
     data_products.rename(columns={'BYGG_NAA'      : 'BUILD_NOW'      }, inplace=True)
     data_products.rename(columns={'OMRAADE'       : 'LEVEL_1'        }, inplace=True) # område oversettes noen ganger i Nav til field
     data_products.rename(columns={'TEMA'          : 'LEVEL_2'        }, inplace=True) # tema oversettes ofte i Nav til theme
-    data_products.rename(columns={'NUMMER'        : 'TABLE_REF'       }, inplace=True)
+    data_products.rename(columns={'NUMMER'        : 'TABLE_REF'      }, inplace=True)
     data_products.rename(columns={'TITTEL'        : 'TITLE'          }, inplace=True)
     data_products.rename(columns={'BESKRIVELSE'   : 'CONTENTS'       }, inplace=True)
     # data_products.rename(columns={'STUB'          : 'STUB'           }, inplace=True)
@@ -20,6 +21,8 @@ def prepare_data_products(common_meta_filepath):
     # data_products.rename(columns={'UNITS'         : 'UNITS'          }, inplace=True)
     # data_products.rename(columns={'SEP'           : 'SEP'            }, inplace=True)
 
+    data_products['TABLE_REF_RAW'] = data_products['TABLE_REF']
+    data_products['TABLE_REF'] = data_products['TABLE_REF'].apply(_shorten_table_ref)
 
     # Filter based on command line arguments
     input_arg = sys.argv[1] if len(sys.argv) > 1 else None
@@ -30,7 +33,7 @@ def prepare_data_products(common_meta_filepath):
         data_products['FORCE_BUILD'] = True
     else: # Build only table specified
         data_products['FORCE_BUILD'] = False
-        data_products.loc[data_products['TABLE_REF'] == input_arg, 'FORCE_BUILD'] = True
+        data_products.loc[(data_products['TABLE_REF'] == input_arg) or (data_products['TABLE_REF_FULL'] == input_arg), 'FORCE_BUILD'] = True
 
     # Remove data products where BUILD_NOW is not set to 'x' in Excel sheet and FORCE_BUILD is not True or None
     data_products = data_products[(data_products['BUILD_NOW'] == 'x') & (data_products['FORCE_BUILD'] != False)]
@@ -46,6 +49,22 @@ def prepare_data_products(common_meta_filepath):
         print_filter(duplicates_df, 0)
 
     return data_products
+# _____________________________________________________________________________
+# Shorten table reference to max 20 chars (excluding separators) by truncating each part
+def _shorten_table_ref(table_ref):
+    table_ref_str = str(table_ref)
+    text_parts = re.split(r'[_-]', table_ref_str) # Split by '_' and '-' to get text parts only
+    
+    # Check if total length (without separators) exceeds 20
+    total_length = sum(len(p) for p in text_parts)
+    if total_length <= 20:
+        # Still remove separators even if not too long
+        return ''.join(text_parts)
+    
+    max_chars = 20 // len(text_parts)  # Calculate max chars per part by floor division
+    truncated_parts = [p[:max_chars] for p in text_parts] # Truncate each text part and join without separators
+    
+    return ''.join(truncated_parts)
 
 # _____________________________________________________________________________
 def prepare_metadata_base(common_meta_filepath):
@@ -170,13 +189,15 @@ def prep_list_from_string(in_string, separator=',', to_upper=True, split_part=0)
         out_list = []
     return out_list
 def _prep_list_from_string_mod(substring, to_upper, split_part):
-    if to_upper:
-        substring = substring.upper().strip()
     if split_part is not None:
         try:
-            substring = substring.split('#')[split_part].strip()
+            substring = substring.split('#')[split_part]
         except Exception:
             substring = None
+    if substring != None:
+        substring = substring.strip()
+        if to_upper:
+            substring = substring.upper()
     return substring
     
 # _____________________________________________________________________________

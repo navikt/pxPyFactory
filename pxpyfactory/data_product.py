@@ -12,7 +12,8 @@ class PXDataProduct:
         self.force_build         = dp_row.pop('FORCE_BUILD')
         self.hashed_params       = hashlib.sha256(dp_row.to_string().encode()).hexdigest() # Store hashed parameters to detect changes in input files
 
-        self.table_ref           = 'NAV_' + dp_row['TABLE_REF'] # Nav uses NAV_ as a prefix for table numbers
+        self.table_ref           = '' + dp_row['TABLE_REF'] # Nav uses NAV_ as a prefix for table numbers
+        self.table_ref_raw       = dp_row['TABLE_REF_RAW'] # Table ref from input/excel before shortening
         self.table_name          = dp_row['TITLE']
         self.table_sep           = dp_row['SEP'] # Separator used in .csv-file (used for reading input file)
         self.subject_code        = dp_row['LEVEL_1']
@@ -28,8 +29,8 @@ class PXDataProduct:
         self.contents_var        = dp_row['CONTENTS']
         self.contvariable        = 'STAT_VAR' # data_list[0] # Column name for contents variable - can probably be anything..
 
-        self.table_path          = get_path([self.main_app.input_path, self.table_ref + '.csv'])
-        self.table_meta_path     = get_path([self.main_app.input_path, self.table_ref + '_meta.csv'])
+        self.table_path          = get_path([self.main_app.input_path, self.table_ref_raw + '.csv'])
+        self.table_meta_path     = get_path([self.main_app.input_path, self.table_ref_raw + '_meta.csv'])
         self.px_output_path      = get_path([self.main_app.output_path, dp_row['LEVEL_1'], dp_row['LEVEL_2'], self.table_ref + '.px'])
 
         self.list_of_lines       = [] # Final list of lines to be written to .px file
@@ -42,9 +43,9 @@ class PXDataProduct:
             print_filter(f"WARNING: No data found. Skipping this data product / table.", 1)
             return False
         
-        if not self._input_changed() and self.force_build != True:
-            print_filter(f"INFO: No changes in input files since last run. Skipping this data product / table.", 1)
-            return False
+        # if not self._input_changed() and self.force_build != True:
+        #     print_filter(f"INFO: No changes in input files since last run. Skipping this data product / table.", 1)
+        #     return False
         
         self.table_data = file_read(self.table_path, sep=self.table_sep) # Fetch data table from .parquet or .csv file
         self._set_columns() # Set stub, heading and data columns if not set, based on data table content
@@ -272,7 +273,36 @@ class PXDataProduct:
         return data_lines
 
 # _____________________________________________________________________________
+    def new_get_lines_of_data_from_table(self, values_dict, fill_value):
+        # Match list items to actual column names (case-insensitive)
+        actual_columns = self.table_data.columns.tolist()
+        columns_map = {col.upper(): col for col in actual_columns}
+        
+        stub_list_actual = [columns_map.get(col.upper(), col) for col in self.stub_list]
+        heading_list_actual = [columns_map.get(col.upper(), col) for col in self.heading_list]
+        data_list_actual = [columns_map.get(col.upper(), col) for col in self.data_list]
+        
+        # 1. Generate all possible combinations in the correct order
+        stub_and_headings = stub_list_actual + heading_list_actual
+        all_combinations_of_stub_heading = pd.DataFrame(list(product(*[values_dict[axis] for axis in stub_and_headings])), columns=stub_and_headings)
+        print_filter(all_combinations_of_stub_heading, 3)
+        # 2. Merge with actual data
+        expanded_table_data = pd.merge(all_combinations_of_stub_heading, self.table_data, on=stub_and_headings, how='left').fillna(fill_value)
+        print_filter(expanded_table_data, 3)
+
+        data_pivot = expanded_table_data.pivot_table(index=stub_list_actual, columns=heading_list_actual, values=data_list_actual, aggfunc='first')
+        data_lines = [' '.join(map(str, row)) for row in data_pivot.values] # Convert each row to a space-separated string
+
     def _get_lines_of_data_from_table(self, values_dict, fill_value):
+
+        print('==='*50)
+        print(f"values_dict: {values_dict}")
+        print(f"stub_list: {self.stub_list}")
+        print(f"heading_list: {self.heading_list}")
+        print(f"data_list: {self.data_list}")
+        print(f"table_data: {self.table_data}")
+        print('==='*50)
+
         # 1. Generate all possible combinations in the correct order
         stub_and_headings = self.stub_list + self.heading_list
         all_combinations_of_stub_heading = pd.DataFrame(list(product(*[values_dict[axis] for axis in stub_and_headings])), columns=stub_and_headings)
