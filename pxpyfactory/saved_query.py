@@ -30,7 +30,7 @@ def generate_sqa_content(table_id, stub_list, heading_list, data_list, values_di
     })
     
     # Add all other variables (stub + heading)
-    all_variables = stub_list + heading_list
+    all_variables = heading_list + stub_list
     for var in all_variables:
         if var in values_dict:
             # Generate index-based value codes (0, 1, 2, ...)
@@ -38,7 +38,7 @@ def generate_sqa_content(table_id, stub_list, heading_list, data_list, values_di
             selection.append({
                 "VariableCode": var,
                 "CodeList": None,
-                "ValueCodes": value_codes
+                "ValueCodes": value_codes  # Try with None to select all values
             })
     
     # Build the complete structure

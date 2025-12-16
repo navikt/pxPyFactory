@@ -32,4 +32,7 @@ class PXMain:
                         # If logging is successful, print confirmation
                         print_filter(f"PX file successfully written: {px_data_product.px_output_path}", 1)
                         px_files_written += 1
+                    print('============  SQ  ===========')
+                    px_data_product.make_sq() # Create a standard Saved Query for the px file
+                    print('============ /SQ  ===========')
         print_filter(f"\n--- PX file generation completed. Total PX files written: {px_files_written} ---", 0)

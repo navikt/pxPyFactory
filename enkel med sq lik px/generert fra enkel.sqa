@@ -12,30 +12,17 @@
             {
                 "VariableCode": "VARE",
                 "CodeList": null,
-                "ValueCodes": [
-                    "0",
-                    "1",
-                    "2"
-                ]
+                "ValueCodes": null
             },
             {
                 "VariableCode": "FARGE",
                 "CodeList": null,
-                "ValueCodes": [
-                    "0",
-                    "1",
-                    "2",
-                    "3"
-                ]
+                "ValueCodes": null
             },
             {
                 "VariableCode": "AAR",
                 "CodeList": null,
-                "ValueCodes": [
-                    "0",
-                    "1",
-                    "2"
-                ]
+                "ValueCodes": null
             }
         ],
         "Placement": {

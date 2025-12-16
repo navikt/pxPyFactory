@@ -1,8 +1,9 @@
 import pandas as pd
 import hashlib
 from itertools import product
-from pxpyfactory.io_utils import get_path, file_exists, file_read, get_file_info, write_log
+from pxpyfactory.io_utils import get_path, file_exists, file_read, get_file_info, write_log, file_write
 from pxpyfactory.utils import prep_list_from_string, update_metadata, metadata_add, get_first_notnull, valid_value, is_list_empty, alert_missing_mandatory, serialize_to_px_format, get_time_formatted, same_value, print_filter
+from pxpyfactory.saved_query import generate_sqa_content, generate_sqs_content
 # import pprint
 
 class PXDataProduct:
@@ -32,6 +33,8 @@ class PXDataProduct:
         self.table_path          = get_path([self.main_app.input_path, self.table_ref_raw + '.csv'])
         self.table_meta_path     = get_path([self.main_app.input_path, self.table_ref_raw + '_meta.csv'])
         self.px_output_path      = get_path([self.main_app.output_path, dp_row['LEVEL_1'], dp_row['LEVEL_2'], self.table_ref + '.px'])
+        self.sqa_output_path     = get_path([self.main_app.output_path, 'sq', self.table_ref[0], self.table_ref + '.sqa'])
+        self.sqs_output_path     = get_path([self.main_app.output_path, 'sq', self.table_ref[0], self.table_ref + '.sqs'])
 
         self.list_of_lines       = [] # Final list of lines to be written to .px file
 
@@ -49,16 +52,16 @@ class PXDataProduct:
         
         self.table_data = file_read(self.table_path, sep=self.table_sep) # Fetch data table from .parquet or .csv file
         self._set_columns() # Set stub, heading and data columns if not set, based on data table content
-        values_dict = self._prepare_table_data() # Create a dictionary with unique values for each column and ensure correct formatting of content
+        self.values_dict = self._prepare_table_data() # Create a dictionary with unique values for each column and ensure correct formatting of content
 
         # Make dict from data product info:
-        manual_metadata_updates_dict = self._get_manual_metadata_updates(values_dict)
+        manual_metadata_updates_dict = self._get_manual_metadata_updates(self.values_dict)
         # Merge common metadata base with manual metadata (manual metadata are placed in 'MANUAL_VALUE' column):
         metadata_prep = update_metadata(self.main_app.metadata_base.copy(), 'MANUAL_VALUE', manual_metadata_updates_dict)
         # Prepare final metadata values for this data product, and get the fill_value for missing data:
         metadata, fill_value = self._prepare_metadata_values(metadata_prep)
 
-        data_lines = self._get_lines_of_data_from_table(values_dict, fill_value)
+        data_lines = self._get_lines_of_data_from_table(self.values_dict, fill_value)
         alert_missing_mandatory(metadata) # Alert if any mandatory keywords are missing values
 
         # Final product from each data product is the content to be written to the .px file:
@@ -66,6 +69,25 @@ class PXDataProduct:
 
         return True
     # _____________________________________________________________________________
+    # Generate saved query files (.sqa and .sqs) for this data product
+    def make_sq(self):
+        print(f"Generate Sqved Query for {self.table_ref}")
+        
+        # Generate .sqa content
+        sqa_content = generate_sqa_content(
+            table_id=self.table_ref,
+            stub_list=self.stub_list,
+            heading_list=self.heading_list,
+            data_list=self.data_list,
+            values_dict=self.values_dict,
+            language="no"
+        )
+        file_write(self.sqa_output_path, sqa_content)
+        
+        # Generate .sqs content
+        sqs_content = generate_sqs_content()
+        file_write(self.sqs_output_path, sqs_content)
+     # _____________________________________________________________________________
     # Log production of current px file to production_log.jsonl
     def log_file_production(self):
         size, time = get_file_info(self.table_path)

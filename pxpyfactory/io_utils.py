@@ -88,9 +88,9 @@ def get_file_info(file_path):
 def write_log(file_path, content_df):
     return write_gcs_file(file_path, content_df.to_json(orient='records', lines=True))
 # _____________________________________________________________________________
-# Create folder from path if it does not exist, and write alias file in it
-def write_folder_alias(file_path, alias):
-    write_gcs_file(file_path, alias)
+# Create folder from path if it does not exist, and write file in it
+def file_write(file_path, content):
+    write_gcs_file(file_path, content)
 # _____________________________________________________________________________
 # Save a list of lines to a .px file
 # Return True if successful writing to file, False otherwise

@@ -2,7 +2,7 @@ import sys
 import pandas as pd
 import re
 from datetime import datetime
-from pxpyfactory.io_utils import file_read, write_folder_alias
+from pxpyfactory.io_utils import file_read, file_write
 
 # _____________________________________________________________________________
 def prepare_data_products(common_meta_filepath):
@@ -33,7 +33,8 @@ def prepare_data_products(common_meta_filepath):
         data_products['FORCE_BUILD'] = True
     else: # Build only table specified
         data_products['FORCE_BUILD'] = False
-        data_products.loc[(data_products['TABLE_REF'] == input_arg) or (data_products['TABLE_REF_FULL'] == input_arg), 'FORCE_BUILD'] = True
+        data_products.loc[data_products['TABLE_REF'] == input_arg, 'FORCE_BUILD'] = True
+        data_products.loc[data_products['TABLE_REF_RAW'] == input_arg, 'FORCE_BUILD'] = True
 
     # Remove data products where BUILD_NOW is not set to 'x' in Excel sheet and FORCE_BUILD is not True or None
     data_products = data_products[(data_products['BUILD_NOW'] == 'x') & (data_products['FORCE_BUILD'] != False)]
@@ -111,7 +112,7 @@ def update_folder_structure(data_products_df, alias_df, output_path):
             if leaf in alias_df['CODE'].values:
                 alias_value = alias_df.loc[alias_df['CODE'] == leaf, language.upper()].iloc[0]
             file_path = path + '/' + 'alias_' + language + '.txt'
-            write_folder_alias(file_path, alias_value)
+            file_write(file_path, alias_value)
 # _____________________________________________________________________________
 # For each row in metadata_base, if the 'keyword' is found in amendment_df,
 # insert the value from amendment_df to the new_column_name-column in metadata.
