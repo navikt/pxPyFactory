@@ -20,6 +20,7 @@ class PXMain:
 
         update_folder_structure(data_products_df, self.alias_df, self.output_path) # Create folder structure from data_products dataframe
         px_files_written = 0
+        sq_file_pairs_written = 0
         # Process each data product:
         for i, row in data_products_df.iterrows():
             print_filter(f"\n--- Start processing data product / table from orderline: {i+2} ---", 1)
@@ -32,7 +33,8 @@ class PXMain:
                         # If logging is successful, print confirmation
                         print_filter(f"PX file successfully written: {px_data_product.px_output_path}", 1)
                         px_files_written += 1
-                    print('============  SQ  ===========')
-                    px_data_product.make_sq() # Create a standard Saved Query for the px file
-                    print('============ /SQ  ===========')
-        print_filter(f"\n--- PX file generation completed. Total PX files written: {px_files_written} ---", 0)
+                    if px_data_product.make_sq(): # Create a standard Saved Query for the px file
+                        print(f"Generated Saved Query files for {self.table_ref}")
+                        sq_file_pairs_written += 1
+
+        print_filter(f"\n--- PX file generation completed. Total PX files written: {px_files_written} (included saved query file pairs: {sq_file_pairs_written}) ---", 0)

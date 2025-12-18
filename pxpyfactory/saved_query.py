@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timezone
 
 
-def generate_sqa_content(table_id, stub_list, heading_list, data_list, values_dict, language="no"):
+def generate_sqa_content(self, table_id, stub_list, heading_list, data_list, values_dict, contvariable, language="no"):
     """
     Generate the content for a .sqa (saved query attributes) file.
     
@@ -12,12 +12,24 @@ def generate_sqa_content(table_id, stub_list, heading_list, data_list, values_di
         heading_list: List of heading variables
         data_list: List of data/content variables
         values_dict: Dictionary with unique values for each variable
+        contvariable: Content variable name
+        input_params: DataFrame with SQ parameters (KEYWORD, VALUE) for column selection
+        rename_map: Dictionary mapping original column names to renamed ones
         language: Language code (default "no")
     
     Returns:
         JSON string for .sqa file
     """
-    contvariable = "STAT_VAR"
+    # Rename KEYWORDs in input_params to match renamed columns
+    # Build rename map from metadata
+    rename_map = {}
+    for _, row in self.table_meta_rename.iterrows():
+        keyword = row['KEYWORD']
+        new_name = row['VALUE']
+        rename_map[keyword] = new_name
+    
+    input_params = self.table_meta_sq # DataFrame with SQ parameters - contains KEYWORD = the column name, VALUE number of rows to show (from last)
+    input_params['KEYWORD'] = input_params['KEYWORD'].map(lambda x: rename_map.get(x, x))
     
     # Build selection array with all variables
     selection = []
@@ -33,12 +45,24 @@ def generate_sqa_content(table_id, stub_list, heading_list, data_list, values_di
     all_variables = heading_list + stub_list
     for var in all_variables:
         if var in values_dict:
-            # Generate index-based value codes (0, 1, 2, ...)
-            value_codes = [str(i) for i in range(len(values_dict[var]))]
+            # Check if there's a constraint from input_params
+            constraint_row = input_params[input_params['KEYWORD'] == var]
+            
+            if not constraint_row.empty:
+                # Get number of last values to include
+                num_values = int(constraint_row['VALUE'].iloc[0])
+                # Take last N values from values_dict
+                all_values = values_dict[var]
+                selected_indices = list(range(max(0, len(all_values) - num_values), len(all_values)))
+                value_codes = [str(i) for i in selected_indices]
+            else:
+                # Include all values
+                value_codes = [str(i) for i in range(len(values_dict[var]))]
+            
             selection.append({
                 "VariableCode": var,
                 "CodeList": None,
-                "ValueCodes": value_codes  # Try with None to select all values
+                "ValueCodes": value_codes
             })
     
     # Build the complete structure

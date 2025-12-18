@@ -36,7 +36,16 @@ class PXDataProduct:
         self.sqa_output_path     = get_path([self.main_app.output_path, 'sq', self.table_ref[0], self.table_ref + '.sqa'])
         self.sqs_output_path     = get_path([self.main_app.output_path, 'sq', self.table_ref[0], self.table_ref + '.sqs'])
 
-        self.list_of_lines       = [] # Final list of lines to be written to .px file
+        # Common variables to be set later:
+        # self.table_data          = pd.DataFrame() # DataFrame with the actual data from input file
+        # self.table_meta          = pd.DataFrame() # DataFrame with the actual data from input file
+        # self.table_meta_rename   = pd.DataFrame() # DataFrame with rename info from spesific metadata file
+        # self.table_meta_px       = pd.DataFrame() # DataFrame with px parameters from spesific metadata file
+        # self.table_meta_sq       = pd.DataFrame() # DataFrame with sq parameters from spesific metadata file
+        # self.values_dict         = {} # Dictionary with unique values for each column in the data table
+        # self.rename_map          = {} # Dictionary mapping original column names to renamed ones
+
+        # self.list_of_lines       = [] # Final list of lines to be written to .px file
 
     # _____________________________________________________________________________
     def make_px(self):
@@ -46,20 +55,36 @@ class PXDataProduct:
             print_filter(f"WARNING: No data found. Skipping this data product / table.", 1)
             return False
         
-        # if not self._input_changed() and self.force_build != True:
-        #     print_filter(f"INFO: No changes in input files since last run. Skipping this data product / table.", 1)
-        #     return False
+        if not self._input_changed() and self.force_build != True:
+            print_filter(f"INFO: No changes in input files since last run. Skipping this data product / table.", 1)
+            return False
         
         self.table_data = file_read(self.table_path, sep=self.table_sep) # Fetch data table from .parquet or .csv file
-        self._set_columns() # Set stub, heading and data columns if not set, based on data table content
+        # Read spesific metadata from .csv-file if it exists:
+        table_meta = file_read(self.table_meta_path, sep=self.table_sep)
+        # _validate_and_split_table_metadata(table_meta) # Extract metadata from table_meta to spesific PX parameters, renaming of columns, and Saved Query parameters
+
+        if {'TYPE', 'KEYWORD', 'VALUE'}.issubset(table_meta.columns):
+            print_filter("Valid file for spesific metadata used.", 2)
+        else:
+            table_meta = table_meta.reindex(columns=table_meta.columns.tolist() + ['TYPE', 'KEYWORD', 'VALUE'], fill_value=None) # add missing columns to avoid faults
+        table_meta['TYPE'] = table_meta['TYPE'].apply(str.upper)
+        table_meta['KEYWORD'] = table_meta['KEYWORD'].apply(str.upper)
+
+        self.table_meta_rename = table_meta[table_meta['TYPE'] == 'RENAME'][['KEYWORD', 'VALUE']] # create df with only px parameters
+        self._set_columns(self.table_meta_rename) # Set stub, heading and data columns if not set, based on data table content
         self.values_dict = self._prepare_table_data() # Create a dictionary with unique values for each column and ensure correct formatting of content
 
         # Make dict from data product info:
         manual_metadata_updates_dict = self._get_manual_metadata_updates(self.values_dict)
         # Merge common metadata base with manual metadata (manual metadata are placed in 'MANUAL_VALUE' column):
         metadata_prep = update_metadata(self.main_app.metadata_base.copy(), 'MANUAL_VALUE', manual_metadata_updates_dict)
+
+
         # Prepare final metadata values for this data product, and get the fill_value for missing data:
-        metadata, fill_value = self._prepare_metadata_values(metadata_prep)
+        # This is spesific metadata for this data product - stored in a separate .csv-file
+        self.table_meta_px = table_meta[table_meta['TYPE'] == 'PX'][['KEYWORD', 'VALUE']] # create df with only px parameters
+        metadata, fill_value = self._prepare_metadata_values(metadata_prep, self.table_meta_px)
 
         data_lines = self._get_lines_of_data_from_table(self.values_dict, fill_value)
         alert_missing_mandatory(metadata) # Alert if any mandatory keywords are missing values
@@ -67,19 +92,22 @@ class PXDataProduct:
         # Final product from each data product is the content to be written to the .px file:
         self.list_of_lines = serialize_to_px_format(metadata, data_lines)
 
+        self.table_meta_sq = table_meta[table_meta['TYPE'] == 'SQ'][['KEYWORD', 'VALUE']] # create df with only sq parameters
+
+
         return True
     # _____________________________________________________________________________
     # Generate saved query files (.sqa and .sqs) for this data product
     def make_sq(self):
-        print(f"Generate Sqved Query for {self.table_ref}")
-        
         # Generate .sqa content
         sqa_content = generate_sqa_content(
+            self,
             table_id=self.table_ref,
             stub_list=self.stub_list,
             heading_list=self.heading_list,
             data_list=self.data_list,
             values_dict=self.values_dict,
+            contvariable=self.contvariable,
             language="no"
         )
         file_write(self.sqa_output_path, sqa_content)
@@ -140,7 +168,7 @@ class PXDataProduct:
         return False
     # _____________________________________________________________________________
     # Update stub_list, heading_list and data_list based on content of table_data if any of the lists are empty
-    def _set_columns(self):
+    def _set_columns(self, table_meta_rename):
         remaining_columns = self.table_data.columns.tolist()
         print_filter(f"  All columns in table: {remaining_columns}", 2)
 
@@ -186,6 +214,24 @@ class PXDataProduct:
                 self.heading_list.append(column)
         print_filter(f"  Updated heading_list: {self.heading_list}", 2)
 
+        # Build rename map from metadata
+        rename_map = {}
+        for _, row in table_meta_rename.iterrows():
+            keyword = row['KEYWORD']
+            new_name = row['VALUE']
+            rename_map[keyword] = new_name
+        
+        # Apply renames to all lists
+        if rename_map:
+            self.data_list = [rename_map.get(item, item) for item in self.data_list]
+            self.stub_list = [rename_map.get(item, item) for item in self.stub_list]
+            self.heading_list = [rename_map.get(item, item) for item in self.heading_list]
+            self.units_list = [rename_map.get(item, item) for item in self.units_list]
+            self.contvariable = rename_map.get(self.contvariable, self.contvariable)
+            
+            # Apply renames to DataFrame columns
+            self.table_data.rename(columns=rename_map, inplace=True)
+            print_filter(f"  Applied renames: {rename_map}", 2)
 
     # _____________________________________________________________________________
     # Create a dictionary with unique values for each column
@@ -255,18 +301,10 @@ class PXDataProduct:
     # _____________________________________________________________________________
     # Add metadata from spesific .csv-file, and prepare final metadata values for this data product.
     # Value used in px-file are selected from the highest priority non-null value from these three columns in metadata df: spesific_value, manual_value, default_value
-    def _prepare_metadata_values(self, metadata_prep):
+    def _prepare_metadata_values(self, metadata_prep, table_meta_px):
         # Add the column 'spesific_value' to 'metadata'. The value is from 'table_meta' (match on keyword).
-        # This is spesific metadata for this data product - stored in a separate .csv-file
-        if file_exists(self.table_meta_path):
-            table_meta = file_read(self.table_meta_path, sep=self.table_sep)
-            if {'KEYWORD', 'VALUE'}.issubset(table_meta.columns):
-                print_filter("Valid file for spesific metadata used.", 2)
-            else:
-                table_meta = pd.DataFrame(columns=['KEYWORD', 'VALUE'])
-        else:
-            table_meta = pd.DataFrame(columns=['KEYWORD', 'VALUE'])
-        metadata_prep = metadata_add(metadata_prep, table_meta, 'SPESIFIC_VALUE') # Merge the two sources of metadata
+
+        metadata_prep = metadata_add(metadata_prep, table_meta_px, 'SPESIFIC_VALUE') # Merge the two sources of metadata
         metadata_prep['MANDATORY'] = metadata_prep['MANDATORY'].fillna('').str.lower().isin(['yes', 'nav']).astype(bool) # Mandatory column cleanup 
 
         # Set the value to the first non-null value in this priority:
@@ -335,13 +373,5 @@ class PXDataProduct:
 
         data_pivot = expanded_table_data.pivot_table(index=self.stub_list, columns=self.heading_list, values=self.data_list, aggfunc='first')
         data_lines = [' '.join(map(str, row)) for row in data_pivot.values] # Convert each row to a space-separated string
-
-
-        # # 3. For each row, extract the data columns in the order of self.data_list
-        # data_lines = []
-        # for _, row in expanded_table_data.iterrows():
-        #     # If you have multiple data columns, you may want to join them all
-        #     values = [row[data_col] for data_col in self.data_list]
-        #     data_lines.append(' '.join(map(str, values)))
 
         return data_lines
