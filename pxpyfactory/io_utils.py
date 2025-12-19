@@ -14,13 +14,24 @@ bucket = storage_client.bucket(bucket_name)
 # _____________________________________________________________________________
 def get_path(path_parts):
     return "/".join(path_parts)
-
+# _____________________________________________________________________________
 def file_exists(file_path):
     try:
         return storage.Blob(bucket=bucket, name=file_path).exists(storage_client)
     except Exception as e:
         print(f"Error checking file existence {file_path}: {e}")
         return False
+# _____________________________________________________________________________
+def get_file_info(file_path):
+    if file_exists(file_path):
+        file_blob = bucket.get_blob(file_path)
+        file_size = file_blob.size # Get file size in bytes
+        raw_time = file_blob.updated # Get last modified time (as a timestamp)
+        # mod_time = datetime.fromtimestamp(raw_time) #.strftime("%Y%m%d %H:%M:%S")
+        # print(f"File info for {file_path}: size={file_size}, mod_time={mod_time}")
+        return file_size, raw_time #mod_time
+    else:
+        return None, None
 # _____________________________________________________________________________
 # Reads a file from Google Cloud Storage and returns its content as a string.
 def read_gcs_file(source_blob_name, download_as_bytes=False):
@@ -34,7 +45,6 @@ def read_gcs_file(source_blob_name, download_as_bytes=False):
     except Exception as e:
         print(f"Error reading file {source_blob_name} from bucket {bucket_name}: {e}")
         return None
-
 # _____________________________________________________________________________
 # Write content to a file in Google Cloud Storage. If file dont exist, it is created.
 def write_gcs_file(destination_blob_name, content):
@@ -73,24 +83,12 @@ def file_read(file_path, sheet_name='Ark1', sep=';', header=0, clean=True):
         print(f"Error reading file {file_path}: {e}")
         return df
 # _____________________________________________________________________________
-# 
-def get_file_info(file_path):
-    if file_exists(file_path):
-        file_blob = bucket.get_blob(file_path)
-        file_size = file_blob.size # Get file size in bytes
-        raw_time = file_blob.updated # Get last modified time (as a timestamp)
-        # mod_time = datetime.fromtimestamp(raw_time) #.strftime("%Y%m%d %H:%M:%S")
-        # print(f"File info for {file_path}: size={file_size}, mod_time={mod_time}")
-        return file_size, raw_time #mod_time
-    else:
-        return None, None
+# Create folder from path if it does not exist, and write file in it
+def file_write(file_path, content):
+    return write_gcs_file(file_path, content)
 # _____________________________________________________________________________
 def write_log(file_path, content_df):
     return write_gcs_file(file_path, content_df.to_json(orient='records', lines=True))
-# _____________________________________________________________________________
-# Create folder from path if it does not exist, and write file in it
-def file_write(file_path, content):
-    write_gcs_file(file_path, content)
 # _____________________________________________________________________________
 # Save a list of lines to a .px file
 # Return True if successful writing to file, False otherwise

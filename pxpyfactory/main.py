@@ -34,7 +34,7 @@ class PXMain:
                         print_filter(f"PX file successfully written: {px_data_product.px_output_path}", 1)
                         px_files_written += 1
                     if px_data_product.make_sq(): # Create a standard Saved Query for the px file
-                        print(f"Generated Saved Query files for {self.table_ref}")
+                        print("Saved Query files generated")
                         sq_file_pairs_written += 1
 
         print_filter(f"\n--- PX file generation completed. Total PX files written: {px_files_written} (included saved query file pairs: {sq_file_pairs_written}) ---", 0)

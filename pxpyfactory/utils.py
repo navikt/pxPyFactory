@@ -277,5 +277,5 @@ def is_list_empty(check_list):
         return False
 # _____________________________________________________________________________
 def print_filter(output, priority_level=0):
-    if priority_level <= 3:
+    if priority_level <= 1:
         print(output)
