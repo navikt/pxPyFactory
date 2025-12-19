@@ -1,17 +1,18 @@
 import pandas as pd
-import hashlib
+from hashlib import sha256
 from itertools import product
-from pxpyfactory.io_utils import get_path, file_exists, file_read, get_file_info, write_log, file_write
-from pxpyfactory.utils import prep_list_from_string, update_metadata, metadata_add, get_first_notnull, valid_value, is_list_empty, alert_missing_mandatory, serialize_to_px_format, get_time_formatted, same_value, print_filter
-from pxpyfactory.saved_query import generate_sqa_content, generate_sqs_content
-# import pprint
+import pxpyfactory.io_utils
+import pxpyfactory.utils
+import pxpyfactory.saved_query
+import pxpyfactory.log
+
 
 class PXDataProduct:
     def __init__(self, main_app, dp_row):
         self.main_app = main_app
 
         self.force_build         = dp_row.pop('FORCE_BUILD')
-        self.hashed_params       = hashlib.sha256(dp_row.to_string().encode()).hexdigest() # Store hashed parameters to detect changes in input files
+        self.hashed_params       = sha256(dp_row.to_string().encode()).hexdigest() # Store hashed parameters to detect changes in input files
 
         self.table_ref           = '' + dp_row['TABLE_REF'] # Nav uses NAV_ as a prefix for table numbers
         self.table_ref_raw       = dp_row['TABLE_REF_RAW'] # Table ref from input/excel before shortening
@@ -20,21 +21,21 @@ class PXDataProduct:
         self.subject_code        = dp_row['LEVEL_1']
         self.subject_area        = dp_row['LEVEL_1'] # todo: update to show the name of the subject area
 
-        self.stub_list           = prep_list_from_string(dp_row['STUB'])
-        self.heading_list        = prep_list_from_string(dp_row['HEADING'])
-        self.data_list           = prep_list_from_string(dp_row['DATA'])
-        self.data_list_pure      = prep_list_from_string(dp_row['DATA'], to_upper=False) # keep formatting of data columns since they are used as values
-        self.data_precision_list = prep_list_from_string(dp_row['DATA'], split_part=1) # get precision part only
-        self.units_list          = prep_list_from_string(dp_row['UNITS'])
+        self.stub_list           = pxpyfactory.utils.prep_list_from_string(dp_row['STUB'])
+        self.heading_list        = pxpyfactory.utils.prep_list_from_string(dp_row['HEADING'])
+        self.data_list           = pxpyfactory.utils.prep_list_from_string(dp_row['DATA'])
+        self.data_list_pure      = pxpyfactory.utils.prep_list_from_string(dp_row['DATA'], to_upper=False) # keep formatting of data columns since they are used as values
+        self.data_precision_list = pxpyfactory.utils.prep_list_from_string(dp_row['DATA'], split_part=1) # get precision part only
+        self.units_list          = pxpyfactory.utils.prep_list_from_string(dp_row['UNITS'])
 
         self.contents_var        = dp_row['CONTENTS']
         self.contvariable        = 'STAT_VAR' # data_list[0] # Column name for contents variable - can probably be anything..
 
-        self.table_path          = get_path([self.main_app.input_path, self.table_ref_raw + '.csv'])
-        self.table_meta_path     = get_path([self.main_app.input_path, self.table_ref_raw + '_meta.csv'])
-        self.px_output_path      = get_path([self.main_app.output_path, dp_row['LEVEL_1'], dp_row['LEVEL_2'], self.table_ref + '.px'])
-        self.sqa_output_path     = get_path([self.main_app.output_path, 'sq', self.table_ref[0], self.table_ref + '.sqa'])
-        self.sqs_output_path     = get_path([self.main_app.output_path, 'sq', self.table_ref[0], self.table_ref + '.sqs'])
+        self.table_path          = pxpyfactory.io_utils.get_path([self.main_app.input_path, self.table_ref_raw + '.csv'])
+        self.table_meta_path     = pxpyfactory.io_utils.get_path([self.main_app.input_path, self.table_ref_raw + '_meta.csv'])
+        self.px_output_path      = pxpyfactory.io_utils.get_path([self.main_app.output_path, dp_row['LEVEL_1'], dp_row['LEVEL_2'], self.table_ref + '.px'])
+        self.sqa_output_path     = pxpyfactory.io_utils.get_path([self.main_app.output_path, 'sq', self.table_ref[0], self.table_ref + '.sqa'])
+        self.sqs_output_path     = pxpyfactory.io_utils.get_path([self.main_app.output_path, 'sq', self.table_ref[0], self.table_ref + '.sqs'])
 
         # Common variables to be set later:
         # self.table_data          = pd.DataFrame() # DataFrame with the actual data from input file
@@ -47,18 +48,18 @@ class PXDataProduct:
 
     # _____________________________________________________________________________
     def make_px(self):
-        print_filter(f"{self.table_ref} {self.table_name}", 1)
+        pxpyfactory.utils.print_filter(f"{self.table_ref} {self.table_name}", 1)
 
-        if not file_exists(self.table_path):
-            print_filter(f"WARNING: No data found. Skipping this data product / table.", 1)
+        if not pxpyfactory.io_utils.file_exists(self.table_path):
+            pxpyfactory.utils.print_filter(f"WARNING: No data found. Skipping this data product / table.", 1)
             return False
         
-        if not self._input_changed() and self.force_build != True:
-            print_filter(f"INFO: No changes in input files since last run. Skipping this data product / table.", 1)
+        if not pxpyfactory.log.input_changed(self) and self.force_build != True:
+            pxpyfactory.utils.print_filter(f"INFO: No changes in input files since last run. Skipping this data product / table.", 1)
             return False
         
-        self.table_data = file_read(self.table_path, sep=self.table_sep) # Fetch data table from .parquet or .csv file
-        table_meta = file_read(self.table_meta_path, sep=self.table_sep) # Read spesific metadata from .csv-file if it exists
+        self.table_data = pxpyfactory.io_utils.file_read(self.table_path, sep=self.table_sep) # Fetch data table from .parquet or .csv file
+        table_meta = pxpyfactory.io_utils.file_read(self.table_meta_path, sep=self.table_sep) # Read spesific metadata from .csv-file if it exists
         self._extract_table_metadata(table_meta) # Extract metadata from table_meta
 
         # Set stub, heading and data columns if not set, based on data table content
@@ -68,24 +69,24 @@ class PXDataProduct:
         # Make dict from data product info:
         manual_metadata_updates_dict = self._get_manual_metadata_updates(self.values_dict)
         # Merge common metadata base with manual metadata (manual metadata are placed in 'MANUAL_VALUE' column):
-        metadata_prep = update_metadata(self.main_app.metadata_base.copy(), 'MANUAL_VALUE', manual_metadata_updates_dict)
+        metadata_prep = pxpyfactory.utils.update_metadata(self.main_app.metadata_base.copy(), 'MANUAL_VALUE', manual_metadata_updates_dict)
 
         # Prepare final metadata values for this data product, and get the fill_value for missing data:
         # This is spesific metadata for this data product - stored in a separate .csv-file
         metadata, fill_value = self._prepare_metadata_values(metadata_prep, self.table_meta_px)
 
         data_lines = self._get_lines_of_data_from_table(self.values_dict, fill_value)
-        alert_missing_mandatory(metadata) # Alert if any mandatory keywords are missing values
+        pxpyfactory.utils.alert_missing_mandatory(metadata) # Alert if any mandatory keywords are missing values
 
         # Final product from each data product is the content to be written to the .px file:
-        self.list_of_lines = serialize_to_px_format(metadata, data_lines)
+        self.list_of_lines = pxpyfactory.utils.serialize_to_px_format(metadata, data_lines)
         return True
 
     # _____________________________________________________________________________
     # Generate saved query files (.sqa and .sqs) for this data product
     def make_sq(self):
         # Generate .sqa content
-        sqa_content = generate_sqa_content(
+        sqa_content = pxpyfactory.saved_query.generate_sqa_content(
             self,
             table_id=self.table_ref,
             stub_list=self.stub_list,
@@ -95,74 +96,23 @@ class PXDataProduct:
             contvariable=self.contvariable,
             language="no"
         )
-        sqa_ok = file_write(self.sqa_output_path, sqa_content)
+        sqa_ok = pxpyfactory.io_utils.file_write(self.sqa_output_path, sqa_content)
         
         # Generate .sqs content
-        sqs_content = generate_sqs_content()
-        sqs_ok = file_write(self.sqs_output_path, sqs_content)
+        sqs_content = pxpyfactory.saved_query.generate_sqs_content()
+        sqs_ok = pxpyfactory.io_utils.file_write(self.sqs_output_path, sqs_content)
 
         if sqa_ok and sqs_ok:
             return True
     # _____________________________________________________________________________
-    # Log production of current px file to production_log.jsonl
-    def log_file_production(self):
-        size, time = get_file_info(self.table_path)
-        meta_size, meta_time = get_file_info(self.table_meta_path)
-        current_entry_dict = {
-            'table_ref': self.table_ref,
-            'timestamp': get_time_formatted(),
-            'hashed_params': self.hashed_params,
-            'file_size': size if size is not None else '-',
-            'mod_time': get_time_formatted(time) if time is not None else '-',
-            'meta_file_size': meta_size if meta_size is not None else '-',
-            'meta_mod_time': get_time_formatted(meta_time) if meta_time is not None else '-'
-        }
-        # self.main_app.production_log.loc[len(self.main_app.production_log)] = current_entry_dict
-        self.main_app.production_log = pd.concat([self.main_app.production_log, pd.DataFrame([current_entry_dict])], ignore_index=True)
-        if write_log(self.main_app.production_log_filepath, self.main_app.production_log):
-            # File append successful+
-            return True
-        else:
-            return False
-        
-    # _____________________________________________________________________________
-    # _____________________________________________________________________________
-    # Compare current input to production, with input to latest production of the same table
-    def _input_changed(self):
-        prod_log = self.main_app.production_log
-        try:
-            latest_entry = prod_log[prod_log['table_ref'] == self.table_ref].sort_values('timestamp').iloc[-1]
-        except Exception as e:
-            print_filter(f"No prior production logged.", 2)
-            return True
-        output_str = (f"Latest production was\n{latest_entry}\nFirst input update:")
-        size, time = get_file_info(self.table_path)
-        meta_size, meta_time = get_file_info(self.table_meta_path)
-        if not same_value(latest_entry['hashed_params'], self.hashed_params):
-            print_filter(f"{output_str} hashed_params: '{latest_entry['hashed_params']}' -> '{self.hashed_params}'", 2)
-            return True
-        if not same_value(latest_entry['file_size'], size):
-            print_filter(f"{output_str} file_size: '{latest_entry['file_size']}' -> '{size}'", 2)
-            return True
-        if not same_value(latest_entry['mod_time'], time):
-            print_filter(f"{output_str} mod_time: '{latest_entry['mod_time']}' -> '{time}'", 2)
-            return True
-        if not same_value(latest_entry['meta_file_size'], meta_size):
-            print_filter(f"{output_str} meta_file_size: '{latest_entry['meta_file_size']}' -> '{meta_size}'", 2)
-            return True
-        if not same_value(latest_entry['meta_mod_time'], meta_time):
-            print_filter(f"{output_str} meta_mod_time : '{latest_entry['meta_mod_time']}' -> '{meta_time}'", 2)
-            return True
-
-        return False
     # _____________________________________________________________________________
     # Extract metadata from table_meta to spesific PX parameters, renaming of columns, and Saved Query parameters
     # use table_meta created in make_px()
     def _extract_table_metadata(self, table_meta):
         if {'TYPE', 'KEYWORD', 'VALUE'}.issubset(table_meta.columns):
-            print_filter("Valid file for spesific metadata.", 2)
+            pxpyfactory.utils.print_filter("Valid file for spesific metadata.", 2)
         else:
-            print_filter("Missing or unvalid file for spesific metadata.", 2)
+            pxpyfactory.utils.print_filter("Missing or unvalid file for spesific metadata.", 2)
             table_meta = table_meta.reindex(columns=table_meta.columns.tolist() + ['TYPE', 'KEYWORD', 'VALUE'], fill_value=None) # add missing columns to avoid faults
         table_meta['TYPE'] = table_meta['TYPE'].apply(str.upper)
         table_meta['KEYWORD'] = table_meta['KEYWORD'].apply(str.upper)
@@ -181,10 +131,10 @@ class PXDataProduct:
     def _prepare_table_data(self):
         # Update stub_list, heading_list and data_list based on content of table_data if any of the lists are empty
         remaining_columns = self.table_data.columns.tolist()
-        print_filter(f"  All columns in table: {remaining_columns}", 2)
+        pxpyfactory.utils.print_filter(f"  All columns in table: {remaining_columns}", 2)
 
-        print_filter(f"  Initial data_list: {self.data_list}", 2)
-        if is_list_empty(self.data_list):
+        pxpyfactory.utils.print_filter(f"  Initial data_list: {self.data_list}", 2)
+        if pxpyfactory.utils.is_list_empty(self.data_list):
             uniqe_values_in_columns = {}
             for column in remaining_columns:
                 uniqe_values_in_columns[column] = len(pd.unique(self.table_data[column]))
@@ -201,10 +151,10 @@ class PXDataProduct:
             for column in self.data_list:
                 if column in remaining_columns:
                     remaining_columns.remove(column)
-        print_filter(f"  Updated data_list: {self.data_list}", 2)
+        pxpyfactory.utils.print_filter(f"  Updated data_list: {self.data_list}", 2)
 
-        print_filter(f"  Initial stub_list: {self.stub_list}", 2)
-        if is_list_empty(self.stub_list):
+        pxpyfactory.utils.print_filter(f"  Initial stub_list: {self.stub_list}", 2)
+        if pxpyfactory.utils.is_list_empty(self.stub_list):
             for column in remaining_columns:
                 if column not in self.heading_list:
                     self.stub_list = [column]
@@ -214,16 +164,16 @@ class PXDataProduct:
             for column in self.stub_list:
                 if column in remaining_columns:
                     remaining_columns.remove(column)
-        print_filter(f"  Updated stub_list: {self.stub_list}", 2)
+        pxpyfactory.utils.print_filter(f"  Updated stub_list: {self.stub_list}", 2)
 
-        print_filter(f"  Initial heading_list: {self.heading_list}", 2)
-        if is_list_empty(self.heading_list):
+        pxpyfactory.utils.print_filter(f"  Initial heading_list: {self.heading_list}", 2)
+        if pxpyfactory.utils.is_list_empty(self.heading_list):
             self.heading_list = []
         # Add all remaining columns must be headings:
         for column in remaining_columns:
             if column not in self.heading_list:
                 self.heading_list.append(column)
-        print_filter(f"  Updated heading_list: {self.heading_list}", 2)
+        pxpyfactory.utils.print_filter(f"  Updated heading_list: {self.heading_list}", 2)
 
         # Apply renames to all lists
         rename_map = self.rename_map
@@ -283,7 +233,7 @@ class PXDataProduct:
                 units_value = self.units_list[0]
 
             manual_metadata_updates_dict['UNITS("' + data_col + '")'] = units_value
-            manual_metadata_updates_dict['LAST-UPDATED("' + data_col + '")'] = get_time_formatted() # current time on px-format
+            manual_metadata_updates_dict['LAST-UPDATED("' + data_col + '")'] = pxpyfactory.utils.get_time_formatted() # current time on px-format
 
             try:
                 data_precision = int(self.data_precision_list[index])
@@ -306,14 +256,14 @@ class PXDataProduct:
     def _prepare_metadata_values(self, metadata_prep, table_meta_px):
         # Add the column 'spesific_value' to 'metadata'. The value is from 'table_meta' (match on keyword).
 
-        metadata_prep = metadata_add(metadata_prep, table_meta_px, 'SPESIFIC_VALUE') # Merge the two sources of metadata
+        metadata_prep = pxpyfactory.utils.metadata_add(metadata_prep, table_meta_px, 'SPESIFIC_VALUE') # Merge the two sources of metadata
         metadata_prep['MANDATORY'] = metadata_prep['MANDATORY'].fillna('').str.lower().isin(['yes', 'nav']).astype(bool) # Mandatory column cleanup 
 
         # Set the value to the first non-null value in this priority:
-        metadata_prep['VALUE'] = metadata_prep[['SPESIFIC_VALUE', 'MANUAL_VALUE', 'DEFAULT_VALUE']].apply(get_first_notnull, axis=1)
+        metadata_prep['VALUE'] = metadata_prep[['SPESIFIC_VALUE', 'MANUAL_VALUE', 'DEFAULT_VALUE']].apply(pxpyfactory.utils.get_first_notnull, axis=1)
         metadata_prep = metadata_prep[['ORDER', 'KEYWORD', 'VALUE', 'TYPE', 'MANDATORY']] # Keep only relevant columns
         # Filter out rows with no value, unless they are mandatory:
-        metadata_prep = metadata_prep[(metadata_prep['MANDATORY']) | (metadata_prep.apply(lambda row: valid_value(row['VALUE']), axis=1))].sort_values('ORDER')
+        metadata_prep = metadata_prep[(metadata_prep['MANDATORY']) | (metadata_prep.apply(lambda row: pxpyfactory.utils.valid_value(row['VALUE']), axis=1))].sort_values('ORDER')
 
         fill_value = metadata_prep.loc[metadata_prep['KEYWORD'] == 'DATASYMBOL2', 'VALUE'].iloc[0] # getting the fill value must be done after preparing the metadata values
 
@@ -323,55 +273,14 @@ class PXDataProduct:
     # Create the data content lines to the px-file.
     # To get the correct format all possible combinations of stub and heading values must be created, and merged with the data table.
     # Missing values are filled with the fill_value from metadata.
-    def __get_lines_of_data_from_table(self, values_dict, fill_value):
-        # Create a DataFrame with all possible combinations:
-        # Merge full matrix with data, and fill missing cells:
-        expanded_table_data = pd.merge(all_combinations, self.table_data, on=self.stub_list + self.heading_list, how='left').fillna(fill_value)
-        # Pivot the table to get the desired format:
-        data_pivot = expanded_table_data.pivot_table(index=self.stub_list, columns=self.heading_list, values=self.data_list, aggfunc='first')
-
-        data_lines = [' '.join(map(str, row)) for row in data_pivot.values] # Convert each row to a space-separated string
-
-        return data_lines
-
-# _____________________________________________________________________________
-    def new_get_lines_of_data_from_table(self, values_dict, fill_value):
-        # Match list items to actual column names (case-insensitive)
-        actual_columns = self.table_data.columns.tolist()
-        columns_map = {col.upper(): col for col in actual_columns}
-        
-        stub_list_actual = [columns_map.get(col.upper(), col) for col in self.stub_list]
-        heading_list_actual = [columns_map.get(col.upper(), col) for col in self.heading_list]
-        data_list_actual = [columns_map.get(col.upper(), col) for col in self.data_list]
-        
-        # 1. Generate all possible combinations in the correct order
-        stub_and_headings = stub_list_actual + heading_list_actual
-        all_combinations_of_stub_heading = pd.DataFrame(list(product(*[values_dict[axis] for axis in stub_and_headings])), columns=stub_and_headings)
-        print_filter(all_combinations_of_stub_heading, 3)
-        # 2. Merge with actual data
-        expanded_table_data = pd.merge(all_combinations_of_stub_heading, self.table_data, on=stub_and_headings, how='left').fillna(fill_value)
-        print_filter(expanded_table_data, 3)
-
-        data_pivot = expanded_table_data.pivot_table(index=stub_list_actual, columns=heading_list_actual, values=data_list_actual, aggfunc='first')
-        data_lines = [' '.join(map(str, row)) for row in data_pivot.values] # Convert each row to a space-separated string
-
     def _get_lines_of_data_from_table(self, values_dict, fill_value):
-
-        print('==='*50)
-        print(f"values_dict: {values_dict}")
-        print(f"stub_list: {self.stub_list}")
-        print(f"heading_list: {self.heading_list}")
-        print(f"data_list: {self.data_list}")
-        print(f"table_data: {self.table_data}")
-        print('==='*50)
-
         # 1. Generate all possible combinations in the correct order
         stub_and_headings = self.stub_list + self.heading_list
         all_combinations_of_stub_heading = pd.DataFrame(list(product(*[values_dict[axis] for axis in stub_and_headings])), columns=stub_and_headings)
-        print_filter(all_combinations_of_stub_heading, 3)
+        pxpyfactory.utils.print_filter(all_combinations_of_stub_heading, 3)
         # 2. Merge with actual data
         expanded_table_data = pd.merge(all_combinations_of_stub_heading, self.table_data, on=stub_and_headings, how='left').fillna(fill_value)
-        print_filter(expanded_table_data, 3)
+        pxpyfactory.utils.print_filter(expanded_table_data, 3)
 
         data_pivot = expanded_table_data.pivot_table(index=self.stub_list, columns=self.heading_list, values=self.data_list, aggfunc='first')
         data_lines = [' '.join(map(str, row)) for row in data_pivot.values] # Convert each row to a space-separated string

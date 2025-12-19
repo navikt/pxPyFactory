@@ -1,7 +1,6 @@
 import json
 from datetime import datetime, timezone
-from pxpyfactory.utils import print_filter
-
+import pxpyfactory.utils
 # _____________________________________________________________________________
 # Creates simple content for an .sqs (saved query statistics) file
 # Retruns JSON string for .sqs file
@@ -49,7 +48,7 @@ def generate_sqa_content(self, table_id, stub_list, heading_list, data_list, val
             value_contsraint = 1
         else:
             total_cells *= value_contsraint
-        print_filter(f"sq: column {var} has {value_count} values, and it set to show {'first' if constraint_from_top else 'last'} {value_contsraint} values.", 1)
+        pxpyfactory.utils.print_filter(f"sq: column {var} has {value_count} values, and it set to show {'first' if constraint_from_top else 'last'} {value_contsraint} values.", 1)
 
         # Take last N values from values_dict
         if constraint_from_top:

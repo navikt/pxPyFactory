@@ -1,10 +1,6 @@
 from google.cloud import storage # Imports the Google Cloud client library
 import pandas as pd
 import io
-# import pprint
-# import os
-# import json
-# from datetime import datetime
 
 storage_client = storage.Client() # Instantiates a client
 bucket_name = "pxweb2-api-nais-test" # The name for the new bucket
@@ -86,9 +82,6 @@ def file_read(file_path, sheet_name='Ark1', sep=';', header=0, clean=True):
 # Create folder from path if it does not exist, and write file in it
 def file_write(file_path, content):
     return write_gcs_file(file_path, content)
-# _____________________________________________________________________________
-def write_log(file_path, content_df):
-    return write_gcs_file(file_path, content_df.to_json(orient='records', lines=True))
 # _____________________________________________________________________________
 # Save a list of lines to a .px file
 # Return True if successful writing to file, False otherwise

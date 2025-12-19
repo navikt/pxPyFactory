@@ -2,11 +2,11 @@ import sys
 import pandas as pd
 import re
 from datetime import datetime
-from pxpyfactory.io_utils import file_read, file_write
+import pxpyfactory.io_utils
 
 # _____________________________________________________________________________
 def prepare_data_products(common_meta_filepath):
-    data_products = file_read(common_meta_filepath, sheet_name='dataprodukter') # Get the overview of all data products
+    data_products = pxpyfactory.io_utils.file_read(common_meta_filepath, sheet_name='dataprodukter') # Get the overview of all data products
     data_products = data_products.map(lambda x: str(x) if pd.notnull(x) else None) # Force content in excel sheet to just strings for easier use (None for empty cells)
     # Column referances in the data_products sheet
     data_products.rename(columns={'BYGG_NAA'      : 'BUILD_NOW'      }, inplace=True)
@@ -71,16 +71,16 @@ def _shorten_table_ref(table_ref):
 def prepare_metadata_base(common_meta_filepath):
     # Prepare general metadata from Excel-sheets - common for all data products
     # Spesific values for each data product will be handled for each data product in separate .csv-files
-    meta_default = file_read(common_meta_filepath, sheet_name='metadata-default')
+    meta_default = pxpyfactory.io_utils.file_read(common_meta_filepath, sheet_name='metadata-default')
     meta_default = meta_default[['ORDER','KEYWORD','MANDATORY','DEFAULT_VALUE','TYPE']] # Keep only relevant columns
-    meta_manual = file_read(common_meta_filepath, sheet_name='metadata-manual') # Manual updates on values for some keywords (can be empty) 
+    meta_manual = pxpyfactory.io_utils.file_read(common_meta_filepath, sheet_name='metadata-manual') # Manual updates on values for some keywords (can be empty) 
     metadata_base = metadata_add(meta_default, meta_manual, 'MANUAL_VALUE') # Adds the column 'manual_value' to 'meta_default'. The value is from 'meta_manual' (match on keyword)
 
     return metadata_base
 # _____________________________________________________________________________
 def prepare_alias(common_meta_filepath):
     # Prepare alias folder names from Excel-sheets - common for all data products
-    alias = file_read(common_meta_filepath, sheet_name='folder-alias')
+    alias = pxpyfactory.io_utils.file_read(common_meta_filepath, sheet_name='folder-alias')
     alias = alias[['CODE','NO','EN']] # Keep only relevant columns
     alias['NO'] = alias['NO'].where(alias['NO'].apply(valid_value), alias['EN']) # Copy EN to NO where NO is invalid
     alias['EN'] = alias['EN'].where(alias['EN'].apply(valid_value), alias['NO']) # Copy NO to EN where EN is invalid
@@ -112,7 +112,7 @@ def update_folder_structure(data_products_df, alias_df, output_path):
             if leaf in alias_df['CODE'].values:
                 alias_value = alias_df.loc[alias_df['CODE'] == leaf, language.upper()].iloc[0]
             file_path = path + '/' + 'alias_' + language + '.txt'
-            file_write(file_path, alias_value)
+            pxpyfactory.io_utils.file_write(file_path, alias_value)
 # _____________________________________________________________________________
 # For each row in metadata_base, if the 'keyword' is found in amendment_df,
 # insert the value from amendment_df to the new_column_name-column in metadata.
