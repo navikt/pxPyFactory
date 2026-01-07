@@ -85,6 +85,7 @@ def prepare_metadata_base(common_meta_filepath):
 def prepare_alias(common_meta_filepath):
     # Prepare alias folder names from Excel-sheets - common for all data products
     alias = pxpyfactory.io_utils.file_read(common_meta_filepath, sheet_name='folder-alias')
+    print_filter('Alias table:', 2)
     alias = alias[['CODE','NO','EN']] # Keep only relevant columns
     alias['NO'] = alias['NO'].where(alias['NO'].apply(valid_value), alias['EN']) # Copy EN to NO where NO is invalid
     alias['EN'] = alias['EN'].where(alias['EN'].apply(valid_value), alias['NO']) # Copy NO to EN where EN is invalid
@@ -280,6 +281,6 @@ def is_list_empty(check_list):
     else:
         return False
 # _____________________________________________________________________________
-def print_filter(output, priority_level=0):
+def print_filter(output, priority_level=2):
     if priority_level <= input_arg_print_filter:
         print(output)
