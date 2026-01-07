@@ -13,6 +13,7 @@ class PXMain:
         self.production_log_filepath = pxpyfactory.io_utils.get_path([self.input_path, 'production_log.jsonl']) # Define path to common metadata file
 
     def run(self):
+        print(f"\n--- Main input found: {pxpyfactory.io_utils.file_exists(self.common_meta_filepath)} ---")
         self.alias_df       = pxpyfactory.utils.prepare_alias(self.common_meta_filepath) # Get and prepare alias
         data_products_df    = pxpyfactory.utils.prepare_data_products(self.common_meta_filepath) # Get and prepare data products for px file generation from Excel-sheet.
         self.metadata_base  = pxpyfactory.utils.prepare_metadata_base(self.common_meta_filepath) # Get and prepare metadata_base
