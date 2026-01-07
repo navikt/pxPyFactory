@@ -1,10 +1,11 @@
 from google.cloud import storage # Imports the Google Cloud client library
 import pandas as pd
 import io
+import pxpyfactory.utils
 
 storage_client = storage.Client() # Instantiates a client
-bucket_name = "pxweb2-api-nais-test" # The name for the new bucket
-# bucket_name = "pxweb2-api-nais-px" # The name for the new bucket
+# bucket_name = "pxweb2-api-nais-test" # The name for the new bucket
+bucket_name = "pxweb2-api-nais-px" # The name for the new bucket
 bucket = storage_client.bucket(bucket_name)
 
 # _____________________________________________________________________________
@@ -15,7 +16,7 @@ def file_exists(file_path):
     try:
         return storage.Blob(bucket=bucket, name=file_path).exists(storage_client)
     except Exception as e:
-        print(f"Error checking file existence {file_path}: {e}")
+        pxpyfactory.utils.print_filter(f"Error checking file existence {file_path}: {e}", 1)
         return False
 # _____________________________________________________________________________
 def get_file_info(file_path):
@@ -24,7 +25,7 @@ def get_file_info(file_path):
         file_size = file_blob.size # Get file size in bytes
         raw_time = file_blob.updated # Get last modified time (as a timestamp)
         # mod_time = datetime.fromtimestamp(raw_time) #.strftime("%Y%m%d %H:%M:%S")
-        # print(f"File info for {file_path}: size={file_size}, mod_time={mod_time}")
+        # pxpyfactory.utils.print_filter(f"File info for {file_path}: size={file_size}, mod_time={mod_time}", 1)
         return file_size, raw_time #mod_time
     else:
         return None, None
@@ -39,7 +40,7 @@ def read_gcs_file(source_blob_name, download_as_bytes=False):
           content = blob.download_as_text()
         return content
     except Exception as e:
-        print(f"Error reading file {source_blob_name} from bucket {bucket_name}: {e}")
+        pxpyfactory.utils.print_filter(f"Error reading file {source_blob_name} from bucket {bucket_name}: {e}", 1)
         return None
 # _____________________________________________________________________________
 # Write content to a file in Google Cloud Storage. If file dont exist, it is created.
@@ -49,7 +50,7 @@ def write_gcs_file(destination_blob_name, content):
         blob.upload_from_string(str(content))
         return True
     except Exception as e:
-        print(f"Error writing file {destination_blob_name} to bucket {bucket_name}: {e}")
+        pxpyfactory.utils.print_filter(f"Error writing file {destination_blob_name} to bucket {bucket_name}: {e}", 1)
         return None
 # _____________________________________________________________________________
 # Reads content from Excel or CSV files and returns a DataFrame
@@ -57,7 +58,7 @@ def write_gcs_file(destination_blob_name, content):
 def file_read(file_path, sheet_name='Ark1', sep=';', header=0, clean=True):
     df = pd.DataFrame()
     if not file_exists(file_path):
-        print(f"File not found: {file_path}")
+        pxpyfactory.utils.print_filter(f"File not found: {file_path}", 1)
         return df
     try:
         if file_path.endswith('.xlsx'):
@@ -76,7 +77,7 @@ def file_read(file_path, sheet_name='Ark1', sep=';', header=0, clean=True):
             df.columns = [column.strip().upper().replace(" ", "_").replace("Æ", "AE").replace("Ø", "O").replace("Å", "AA") for column in df.columns]
         return df
     except Exception as e:
-        print(f"Error reading file {file_path}: {e}")
+        pxpyfactory.utils.print_filter(f"Error reading file {file_path}: {e}", 1)
         return df
 # _____________________________________________________________________________
 # Create folder from path if it does not exist, and write file in it
@@ -87,10 +88,10 @@ def file_write(file_path, content):
 # Return True if successful writing to file, False otherwise
 def write_px(list_of_lines, file_path):
     if file_path is None: # Print to console if no file path is given
-        print('#'*80)
+        pxpyfactory.utils.print_filter('#'*80, 0)
         for line in list_of_lines:
-            print(line[:200])
-        print('#'*80)
+            pxpyfactory.utils.print_filter(line[:200], 0)
+        pxpyfactory.utils.print_filter('#'*80, 0)
         return False
     else:
         write_gcs_file(file_path, "\n".join(list_of_lines))

@@ -20,6 +20,7 @@ class PXMain:
 
         pxpyfactory.utils.update_folder_structure(data_products_df, self.alias_df, self.output_path) # Create folder structure from data_products dataframe
         px_files_written = 0
+        px_files_written_ref = []
         sq_file_pairs_written = 0
         # Process each data product:
         for i, row in data_products_df.iterrows():
@@ -33,8 +34,11 @@ class PXMain:
                         # If logging is successful, print confirmation
                         pxpyfactory.utils.print_filter(f"PX file successfully written: {px_data_product.px_output_path}", 1)
                         px_files_written += 1
+                        px_files_written_ref.append(px_data_product.table_ref)
                     if px_data_product.make_sq(): # Create a standard Saved Query for the px file
-                        print("Saved Query files generated")
+                        pxpyfactory.utils.print_filter("Saved Query files generated", 1)
                         sq_file_pairs_written += 1
 
         pxpyfactory.utils.print_filter(f"\n--- PX file generation completed. Total PX files written: {px_files_written} (included saved query file pairs: {sq_file_pairs_written}) ---", 0)
+        if len(px_files_written_ref) > 0:
+            pxpyfactory.utils.print_filter(f"PX files written for these tables: {', '.join(px_files_written_ref)}", 0)

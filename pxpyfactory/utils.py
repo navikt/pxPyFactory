@@ -4,6 +4,10 @@ import re
 from datetime import datetime
 import pxpyfactory.io_utils
 
+input_args = sys.argv[1:] if len(sys.argv) > 1 else []
+input_arg_force_build = input_args[0] if len(input_args) > 0 else None
+input_arg_print_filter = int(input_args[1]) if len(input_args) > 1 and str(input_args[1]).isdigit() else 0
+
 # _____________________________________________________________________________
 def prepare_data_products(common_meta_filepath):
     data_products = pxpyfactory.io_utils.file_read(common_meta_filepath, sheet_name='dataprodukter') # Get the overview of all data products
@@ -25,16 +29,16 @@ def prepare_data_products(common_meta_filepath):
     data_products['TABLE_REF'] = data_products['TABLE_REF'].apply(_shorten_table_ref)
 
     # Filter based on command line arguments
-    input_arg = sys.argv[1] if len(sys.argv) > 1 else None
-    print(f"Args: {input_arg}")
-    if input_arg == None: # No arguments given - build only tables where input has changed
+    input_arg_force_build = sys.argv[1] if len(sys.argv) > 1 else None
+    print(f"Args: {input_arg_force_build}")
+    if input_arg_force_build == None: # No arguments given - build only tables where input has changed
         data_products['FORCE_BUILD'] = None
-    elif input_arg == 'all': # Build all tables, even if input has not changed
+    elif input_arg_force_build == 'all': # Build all tables, even if input has not changed
         data_products['FORCE_BUILD'] = True
     else: # Build only table specified
         data_products['FORCE_BUILD'] = False
-        data_products.loc[data_products['TABLE_REF'] == input_arg, 'FORCE_BUILD'] = True
-        data_products.loc[data_products['TABLE_REF_RAW'] == input_arg, 'FORCE_BUILD'] = True
+        data_products.loc[data_products['TABLE_REF'] == input_arg_force_build, 'FORCE_BUILD'] = True
+        data_products.loc[data_products['TABLE_REF_RAW'] == input_arg_force_build, 'FORCE_BUILD'] = True
 
     # Remove data products where BUILD_NOW is not set to 'x' in Excel sheet and FORCE_BUILD is not True or None
     data_products = data_products[(data_products['BUILD_NOW'] == 'x') & (data_products['FORCE_BUILD'] != False)]
@@ -277,5 +281,5 @@ def is_list_empty(check_list):
         return False
 # _____________________________________________________________________________
 def print_filter(output, priority_level=0):
-    if priority_level <= 1:
+    if priority_level <= input_arg_print_filter:
         print(output)
