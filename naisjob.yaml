@@ -15,3 +15,7 @@ spec:
           kind: StorageBucket
           name: pxweb2-api-nais-px
         role: roles/storage.objectAdmin
+  observability:
+    logging:
+      destinations:
+        - id: elastic
