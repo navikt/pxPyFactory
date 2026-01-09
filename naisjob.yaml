@@ -12,5 +12,4 @@ spec:
     buckets:
       - name: pxweb2-api-nais-px
         cascadingDelete: false
-        retentionPeriodDays: 30
   
