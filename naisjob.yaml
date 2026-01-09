@@ -7,9 +7,5 @@ metadata:
   namespace: dvh-analytisk-plattform
 spec:
   image: "{{ image }}"
-  # schedule: "*/5 6-16 * * 1-5"  # Commented out to run once on deployment only
-  gcp:
-    buckets:
-      - name: pxweb2-api-nais-px
-        cascadingDelete: false
+  schedule: "*/5 6-16 * * 1-5"  # Commented out to run once on deployment only
   
