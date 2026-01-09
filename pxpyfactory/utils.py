@@ -6,7 +6,7 @@ import pxpyfactory.io_utils
 
 input_args = sys.argv[1:] if len(sys.argv) > 1 else []
 input_arg_force_build = input_args[0] if len(input_args) > 0 else None
-input_arg_print_filter = int(input_args[1]) if len(input_args) > 1 and str(input_args[1]).isdigit() else 0
+input_arg_print_filter = int(input_args[1]) if len(input_args) > 1 and str(input_args[1]).isdigit() else 3 # Last number is the default amount of stuff to print if no input when python is runned
 
 # _____________________________________________________________________________
 def prepare_data_products(common_meta_filepath):
@@ -282,6 +282,6 @@ def is_list_empty(check_list):
     else:
         return False
 # _____________________________________________________________________________
-def print_filter(output, priority_level=3):
+def print_filter(output, priority_level=0):
     if priority_level <= input_arg_print_filter:
         print(output)
