@@ -9,10 +9,8 @@ spec:
   image: "{{ image }}"
   schedule: "*/5 6-16 * * 1-5"  # Commented out to run once on deployment only
   gcp:
-    permissions:
-      - resource:
-          apiVersion: resourcemanager.cnrm.cloud.google.com/v1beta1
-          kind: Project
-          name: dvh-analytisk-plattf-dev-9873
-        role: roles/storage.objectAdmin
+    buckets:
+      - name: pxweb2-api-nais-px
+        cascadingDelete: false
+        retentionPeriodDays: 30
   
