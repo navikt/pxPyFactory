@@ -1,6 +1,6 @@
 FROM europe-north1-docker.pkg.dev/cgr-nav/pull-through/nav.no/python:3.14.0-dev as dev
 USER root
-RUN apk add --update shadow
+RUN apk add --update shadow gcc musl-dev python3-dev
 WORKDIR /pyfactory
 RUN useradd -m -d /pyfactory/ -u 1069 -s /bin/bash pyfactory && \
     chown -R pyfactory:pyfactory /pyfactory/
