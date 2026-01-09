@@ -23,6 +23,7 @@ jobs:
         id: docker-build-push
         with:
           team: dvh-analytisk-plattform
+          salsa: true
 
   deploy-dev:
     name: Deploy dev gcp
