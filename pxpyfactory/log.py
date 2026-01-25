@@ -20,16 +20,22 @@ def log_file_production(px_data_product):
     px_data_product.main_app.production_log = pd.concat([px_data_product.main_app.production_log, pd.DataFrame([current_entry_dict])], ignore_index=True)
     file_path = px_data_product.main_app.production_log_filepath
     content = px_data_product.main_app.production_log.to_json(orient='records', lines=True)
-    if pxpyfactory.io_utils.file_write(file_path, content):
-        # File append successful+
-        return True
-    else:
-        return False
+    return pxpyfactory.io_utils.file_write(file_path, content)  # True if file append successful+
     
 # _____________________________________________________________________________
 # Compare current input to production, with input to latest production of the same table
-def input_changed(px_data_product):
-    prod_log = px_data_product.main_app.production_log
+def object_changed(in_object, prod_log):
+    # Is input path a file or folder ?
+    if isinstance(in_object, str):
+        if '.' in in_object.split('/')[-1]:
+            print("File")
+        else:
+            print("Folder")
+    else:
+        return input_changed(in_object, prod_log)
+# _____________________________________________________________________________
+# Compare current input to production, with input to latest production of the same table
+def input_changed(px_data_product, prod_log):
     try:
         latest_entry = prod_log[prod_log['table_ref'] == px_data_product.table_ref].sort_values('timestamp').iloc[-1]
     except Exception as e:

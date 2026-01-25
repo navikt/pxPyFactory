@@ -54,7 +54,7 @@ class PXDataProduct:
             pxpyfactory.utils.print_filter(f"WARNING: No data found. Skipping this data product / table.", 1)
             return False
         
-        if not pxpyfactory.log.input_changed(self) and self.force_build != True:
+        if not pxpyfactory.log.object_changed(self, self.main_app.production_log) and self.force_build != True:
             pxpyfactory.utils.print_filter(f"INFO: No changes in input files since last run. Skipping this data product / table.", 1)
             return False
         

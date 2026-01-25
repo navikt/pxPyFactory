@@ -51,7 +51,7 @@ def write_gcs_file(destination_blob_name, content):
         return True
     except Exception as e:
         pxpyfactory.utils.print_filter(f"Error writing file {destination_blob_name} to bucket {bucket_name}: {e}", 1)
-        return None
+        return False
 # _____________________________________________________________________________
 # Reads content from Excel or CSV files and returns a DataFrame
 # If the file cannot be read, it returns an empty DataFrame and prints an error message
@@ -94,6 +94,5 @@ def write_px(list_of_lines, file_path):
         pxpyfactory.utils.print_filter('#'*80, 0)
         return False
     else:
-        write_gcs_file(file_path, "\n".join(list_of_lines))
-        return True
+        return write_gcs_file(file_path, "\n".join(list_of_lines))
 # _____________________________________________________________________________
