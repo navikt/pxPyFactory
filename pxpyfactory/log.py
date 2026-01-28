@@ -11,6 +11,7 @@ class PXLog:
         self.filepath = production_log_filepath
         self.log_history = pxpyfactory.io_utils.file_read(production_log_filepath, clean=False) # Read production log file
         self.log_current = []
+        self.alias_built = False
 
 # _____________________________________________________________________________
     def log_data_product(self, data_product):
@@ -51,6 +52,7 @@ class PXLog:
             'input_time': input_time,
             "common_meta_size": common_meta_size,
             "common_meta_time": common_meta_time,
+            'alias_built': self.alias_built,
             'tables_built': px_files_written_ref
         }
         return current_dict

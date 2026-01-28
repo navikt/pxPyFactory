@@ -2,6 +2,7 @@ import pxpyfactory.data_product
 import pxpyfactory.utils
 import pxpyfactory.io_utils
 import pxpyfactory.log
+import pxpyfactory.deployment
 
 class PXMain:
     def __init__(self):
@@ -62,3 +63,17 @@ class PXMain:
             pxpyfactory.utils.print_filter(f"PX files written for these tables: {', '.join(px_files_written_ref)}", 0)
         # Log successful productions to production_log with list of tables built
         self.production_log.write_log(px_files_written_ref)
+
+        self.trigger_deployment()
+
+    def trigger_deployment(self, environment='test-px', branch='main'):
+        """
+        Trigger deployment workflow on pxweb2-api-nais repository
+        See deployment.py for implementation details
+        """
+        deployment_success = pxpyfactory.deployment.trigger_github_deployment(environment, branch)
+
+        if deployment_success:
+            pxpyfactory.utils.print_filter(f"--- Deployment triggered successfully - environment='{environment}', branch='{branch}'---", 0)
+        else:
+            pxpyfactory.utils.print_filter(f"--- Deployment trigger failed - environment='{environment}', branch='{branch}'---", 0)
