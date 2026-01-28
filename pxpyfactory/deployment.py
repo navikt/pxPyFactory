@@ -1,6 +1,10 @@
 import requests
 import os
 import pxpyfactory.utils
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 def trigger_github_deployment(environment='test-px', branch='main'):
@@ -14,9 +18,9 @@ def trigger_github_deployment(environment='test-px', branch='main'):
     Returns:
         bool: True if deployment was triggered successfully, False otherwise
     """
-    github_token = os.environ.get('GITHUB_TOKEN')
+    github_token = os.environ.get('GITHUB_TOKEN_PX')
     if not github_token:
-        pxpyfactory.utils.print_filter("ERROR: GITHUB_TOKEN environment variable not set", 0)
+        pxpyfactory.utils.print_filter("ERROR: GITHUB_TOKEN_PX environment variable not set", 0)
         return False
     
     owner = 'navikt'

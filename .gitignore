@@ -11,3 +11,6 @@ output/*
 !output/.gitkeep
 
 ~$*
+
+# Environment variables
+.env
