@@ -28,12 +28,8 @@ spec:
     limits:
       memory: "4Gi"
       cpu: "1000m"
-  env:
-    - name: GITHUB_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: github-token
-          key: GITHUB_TOKEN
+  envFrom:
+    - secret: github-token
   gcp:
     permissions:
       - resource:
