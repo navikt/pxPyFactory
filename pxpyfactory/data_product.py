@@ -4,7 +4,6 @@ from itertools import product
 import pxpyfactory.io_utils
 import pxpyfactory.utils
 import pxpyfactory.saved_query
-import pxpyfactory.log
 
 
 class PXDataProduct:
@@ -52,10 +51,6 @@ class PXDataProduct:
 
         if not pxpyfactory.io_utils.file_exists(self.table_path):
             pxpyfactory.utils.print_filter(f"WARNING: No data found. Skipping this data product / table.", 1)
-            return False
-        
-        if not pxpyfactory.log.object_changed(self, self.main_app.production_log) and self.force_build != True:
-            pxpyfactory.utils.print_filter(f"INFO: No changes in input files since last run. Skipping this data product / table.", 1)
             return False
         
         self.table_data = pxpyfactory.io_utils.file_read(self.table_path, sep=self.table_sep) # Fetch data table from .parquet or .csv file

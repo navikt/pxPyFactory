@@ -5,9 +5,19 @@ from datetime import datetime
 import pxpyfactory.io_utils
 
 input_args = sys.argv[1:] if len(sys.argv) > 1 else []
-input_arg_force_build = input_args[0] if len(input_args) > 0 else None
-input_arg_print_filter = int(input_args[1]) if len(input_args) > 1 and str(input_args[1]).isdigit() else 3 # Last number is the default amount of stuff to print if no input when python is runned
 
+# _____________________________________________________________________________
+def input_arg(arg_index):
+    return input_args[arg_index] if len(input_args) > arg_index else None
+# _____________________________________________________________________________
+def force_build_arg():
+    return input_arg(0)
+# _____________________________________________________________________________
+def print_filter(output, priority_level=0):
+    input_arg_print_filter = input_arg(1)
+    arg_filter = int(input_arg_print_filter) if str(input_arg_print_filter).isdigit() else 2 # Last number is the default amount of stuff to print if no input when python is runned
+    if priority_level <= arg_filter:
+        print(output)
 # _____________________________________________________________________________
 def prepare_data_products(common_meta_filepath):
     data_products = pxpyfactory.io_utils.file_read(common_meta_filepath, sheet_name='dataprodukter') # Get the overview of all data products
@@ -29,7 +39,7 @@ def prepare_data_products(common_meta_filepath):
     data_products['TABLE_REF'] = data_products['TABLE_REF'].apply(_shorten_table_ref)
 
     # Filter based on command line arguments
-    input_arg_force_build = sys.argv[1] if len(sys.argv) > 1 else None
+    input_arg_force_build = force_build_arg()
     print(f"Args: {input_arg_force_build}")
     if input_arg_force_build == None: # No arguments given - build only tables where input has changed
         data_products['FORCE_BUILD'] = None
@@ -85,8 +95,8 @@ def prepare_metadata_base(common_meta_filepath):
 def prepare_alias(common_meta_filepath):
     # Prepare alias folder names from Excel-sheets - common for all data products
     alias = pxpyfactory.io_utils.file_read(common_meta_filepath, sheet_name='folder-alias')
-    print_filter('Alias table:', 2)
-    print_filter(alias, 2)
+    print_filter('Alias table:', 3)
+    print_filter(alias, 3)
     alias = alias[['CODE','NO','EN']] # Keep only relevant columns
     alias['NO'] = alias['NO'].where(alias['NO'].apply(valid_value), alias['EN']) # Copy EN to NO where NO is invalid
     alias['EN'] = alias['EN'].where(alias['EN'].apply(valid_value), alias['NO']) # Copy NO to EN where EN is invalid
@@ -218,35 +228,49 @@ def alert_missing_mandatory(metadata):
     # raise ValueError(f"Missing mandatory keywords: {', '.join(mandatory_and_missing)}")
 # _____________________________________________________________________________
 def valid_value_or_none(value, full=False):
-    # If value is a list, tuple, or np.ndarray
-    if isinstance(value, (list, tuple, pd.Series)): #, np.ndarray)):
-        # If it has exactly one element and that element is null, skip it
+    # Handle None first
+    if value is None:
+        return None
+    
+    # If value is a list, tuple, or Series - check early to avoid issues with 'in' operator
+    if isinstance(value, (list, tuple, pd.Series)):
         if len(value) == 0 or (len(value) == 1 and pd.isnull(value[0])):
             return None
-        else:
-            return value
-    elif isinstance(value, datetime):
-        # Remove timezone info to allow comparison with naive datetimes
+        return value
+    
+    # Handle empty strings and dicts
+    if value == '' or value == {}:
+        return None
+    
+    # Handle string placeholders
+    if isinstance(value, str):
+        if value.lower() in ['none', 'null', 'nan', 'nat']:
+            return None
+        if full and value in ['-', '.', '..']:
+            return None
+    
+    # Handle NaN for numeric types
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass  # Not a type that can be NaN
+    
+    # Handle datetime
+    if isinstance(value, datetime):
         if value.tzinfo is not None:
             value = value.replace(tzinfo=None)
-        # print(f"Datetime value detected: {value}")
-        time_from = datetime(2020, 1, 1) # earliest valid time
-        time_to = datetime(2099, 12, 31) # latest valid time
+        time_from = datetime(2020, 1, 1)
+        time_to = datetime(2099, 12, 31)
         if time_from <= value <= time_to:
             return get_time_formatted(value)
-    elif value == '':
-        return None
-    elif isinstance(value, str) and value in ['-','.','..'] and full:
-        return None
-    elif isinstance(value, str) and value.lower() in ['none','null','nan','nat']:
-        return None
-    elif pd.notnull(value):
-        return value
-    else:
-        return None
+        return None  # Outside valid range
+    
+    # If we got here, value is valid
+    return value
 # _____________________________________________________________________________
-def valid_value(value):
-    return not valid_value_or_none(value) is None
+def valid_value(value, full=False):
+    return not valid_value_or_none(value, full=full) is None
 # _____________________________________________________________________________
 def same_value(value1, value2):
     return valid_value_or_none(value1, full=True) == valid_value_or_none(value2, full=True)
@@ -281,7 +305,3 @@ def is_list_empty(check_list):
         return True
     else:
         return False
-# _____________________________________________________________________________
-def print_filter(output, priority_level=0):
-    if priority_level <= input_arg_print_filter:
-        print(output)

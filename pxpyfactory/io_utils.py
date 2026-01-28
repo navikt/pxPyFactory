@@ -19,6 +19,15 @@ def file_exists(file_path):
         pxpyfactory.utils.print_filter(f"Error checking file existence {file_path}: {e}", 1)
         return False
 # _____________________________________________________________________________
+def get_path_info(in_path, ignore=None):
+    # Determine if path is a file or folder
+    if '.' in in_path:
+        return get_file_info(in_path)
+    else:
+        return get_folder_info(in_path, ignore=ignore)
+    # if '.' in path.split('/')[-1]:
+
+# _____________________________________________________________________________
 def get_file_info(file_path):
     if file_exists(file_path):
         file_blob = bucket.get_blob(file_path)
@@ -29,6 +38,20 @@ def get_file_info(file_path):
         return file_size, raw_time #mod_time
     else:
         return None, None
+# _____________________________________________________________________________
+def get_folder_info(folder_path, ignore=None):
+    if not folder_path.endswith('/'):
+        folder_path += '/'
+    blobs = storage_client.list_blobs(bucket_name, prefix=folder_path)
+    total_size = 0
+    latest_time = None
+    for blob in blobs:
+        if ignore is not None and blob.name == ignore:
+            continue
+        total_size += blob.size
+        if latest_time is None or blob.updated > latest_time:
+            latest_time = blob.updated
+    return total_size, latest_time
 # _____________________________________________________________________________
 # Reads a file from Google Cloud Storage and returns its content as a string.
 def read_gcs_file(source_blob_name, download_as_bytes=False):
