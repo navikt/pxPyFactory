@@ -20,7 +20,7 @@ metadata:
   namespace: dvh-analytisk-plattform
 spec:
   image: "{{ image }}"
-  schedule: "*/5 6-19 * * 1-5"  # Commented out to run once on deployment only
+#  schedule: "*/5 6-19 * * 1-5"  # Commented out to run once on deployment only
   resources:
     requests:
       memory: "2Gi"

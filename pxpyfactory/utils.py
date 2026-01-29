@@ -89,8 +89,15 @@ def prepare_metadata_base(common_meta_filepath):
     meta_default = meta_default[['ORDER','KEYWORD','MANDATORY','DEFAULT_VALUE','TYPE']] # Keep only relevant columns
     meta_manual = pxpyfactory.io_utils.file_read(common_meta_filepath, sheet_name='metadata-manual') # Manual updates on values for some keywords (can be empty) 
     metadata_base = metadata_add(meta_default, meta_manual, 'MANUAL_VALUE') # Adds the column 'manual_value' to 'meta_default'. The value is from 'meta_manual' (match on keyword)
+    metadata_other = {} # Metadata that will be handled separately for each data product
 
-    return metadata_base
+    # Pop common CONTACT information - it will be merged with spesific CONTACT for each data product later
+    filtered_contact = metadata_base[metadata_base['KEYWORD'] == 'CONTACT'].copy()
+    metadata_base = metadata_base[metadata_base['KEYWORD'] != 'CONTACT']
+    if not filtered_contact.empty:
+        metadata_other['CONTACT'] = str(filtered_contact[['MANUAL_VALUE', 'DEFAULT_VALUE']].apply(pxpyfactory.utils.get_first_notnull, axis=1).iloc[0])
+
+    return metadata_base, metadata_other
 # _____________________________________________________________________________
 def prepare_alias(common_meta_filepath):
     # Prepare alias folder names from Excel-sheets - common for all data products

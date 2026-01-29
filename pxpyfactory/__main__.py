@@ -1,7 +1,7 @@
 from .main import PXMain
 
 def go():
-    print('-- start pxPyFactory --')
+    print('\n-- start pxPyFactory --')
     px_main = PXMain()
     px_main.run()
     print('-- stop  pxPyFactory --')

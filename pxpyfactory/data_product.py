@@ -55,7 +55,7 @@ class PXDataProduct:
         
         self.table_data = pxpyfactory.io_utils.file_read(self.table_path, sep=self.table_sep) # Fetch data table from .parquet or .csv file
         table_meta = pxpyfactory.io_utils.file_read(self.table_meta_path, sep=self.table_sep) # Read spesific metadata from .csv-file if it exists
-        self._extract_table_metadata(table_meta) # Extract metadata from table_meta
+        self._extract_table_metadata(table_meta) # Extract metadata from table_meta (fills table_meta_px, table_meta_sq and rename_map)
 
         # Set stub, heading and data columns if not set, based on data table content
         # Create a dictionary with unique values for each column and ensure correct formatting of content
@@ -217,6 +217,28 @@ class PXDataProduct:
         for key, value in values_dict.items():
             manual_metadata_updates_dict['VALUES("' + key + '")'] = value
 
+        ## Prepare px-parameters
+        # Extract LAST-UPDATED value from metadata, handling missing/duplicate keywords
+        # If it is not stated in metadata, get last updated time from data file
+        filtered_df = self.table_meta_px[self.table_meta_px['KEYWORD'] == 'LAST-UPDATED']
+        self.table_meta_px = self.table_meta_px[self.table_meta_px['KEYWORD'] != 'LAST-UPDATED']  # Remove used rows
+        if filtered_df.empty:
+            last_updated_value = pxpyfactory.io_utils.get_last_updated(self.table_path)
+        else:
+            last_updated_value = str(filtered_df['VALUE'].iloc[0])  # Get first match as string
+            # ? any need for this: pxpyfactory.utils.get_time_formatted(last_updated_value) ?
+        
+        # Extract CONTACT value from metadata, handling missing/duplicate keywords
+        # If it is not stated in metadata, get last updated time from data file
+        contact_value = self.main_app.metadata_other.get('CONTACT', None)
+        filtered_df = self.table_meta_px[self.table_meta_px['KEYWORD'] == 'CONTACT']
+        if not filtered_df.empty:
+            if contact_value is None:
+                contact_value = str(filtered_df['VALUE'].iloc[0])  # Get first match as string
+            else:
+                contact_value += ' + ' + str(filtered_df['VALUE'].iloc[0])  # Append additional contact info on new line
+        self.table_meta_px = self.table_meta_px[self.table_meta_px['KEYWORD'] != 'CONTACT']  # Remove used rows
+
         # Add px-parameter for each data column:
         for index, data_col in enumerate(self.data_list):
             # If there is more data columns than units, use the first unit for the rest
@@ -228,7 +250,6 @@ class PXDataProduct:
                 units_value = self.units_list[0]
 
             manual_metadata_updates_dict['UNITS("' + data_col + '")'] = units_value
-            manual_metadata_updates_dict['LAST-UPDATED("' + data_col + '")'] = pxpyfactory.utils.get_time_formatted() # current time on px-format
 
             try:
                 data_precision = int(self.data_precision_list[index])
@@ -242,6 +263,10 @@ class PXDataProduct:
             # manual_metadata_updates_dict['CFPRICES("' + data_col + '")'] = 
             # manual_metadata_updates_dict['DAYADJ("' + data_col + '")'] = 
             # manual_metadata_updates_dict['SEASADJ("' + data_col + '")'] = 
+
+            manual_metadata_updates_dict['LAST-UPDATED("' + data_col + '")'] = last_updated_value
+            if pxpyfactory.utils.valid_value(contact_value):
+                manual_metadata_updates_dict['CONTACT("' + data_col + '")'] = contact_value
 
         return manual_metadata_updates_dict
 

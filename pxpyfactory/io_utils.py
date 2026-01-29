@@ -19,6 +19,13 @@ def file_exists(file_path):
         pxpyfactory.utils.print_filter(f"Error checking file existence {file_path}: {e}", 1)
         return False
 # _____________________________________________________________________________
+def get_last_updated(in_path):
+    file_size, raw_time = get_file_info(in_path)
+    if raw_time is None:
+        return ''
+    return raw_time.strftime("%y%m%d")
+
+# _____________________________________________________________________________
 def get_path_info(in_path, ignore=None):
     # Determine if path is a file or folder
     if '.' in in_path:

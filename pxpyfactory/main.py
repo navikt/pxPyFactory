@@ -14,7 +14,7 @@ class PXMain:
         self.production_log_filepath = pxpyfactory.io_utils.get_path([self.input_path, 'production_log.jsonl']) # Define path to common metadata file
 
     def run(self):
-        pxpyfactory.utils.print_filter(f"\n--- Main input found: {pxpyfactory.io_utils.file_exists(self.common_meta_filepath)} ---", 1)
+        pxpyfactory.utils.print_filter(f"--- Main input found: {pxpyfactory.io_utils.file_exists(self.common_meta_filepath)} ---", 1)
         self.production_log = pxpyfactory.log.PXLog(self, self.production_log_filepath)
 
         # Check if there has been any changes to input files since last production
@@ -22,8 +22,8 @@ class PXMain:
             pxpyfactory.utils.print_filter(f"--- Content in input folder has not changed since last run (exit)---", 0)
             return
 
-        data_products_df    = pxpyfactory.utils.prepare_data_products(self.common_meta_filepath) # Get and prepare data products for px file generation from Excel-sheet.
-        self.metadata_base  = pxpyfactory.utils.prepare_metadata_base(self.common_meta_filepath) # Get and prepare metadata_base
+        data_products_df = pxpyfactory.utils.prepare_data_products(self.common_meta_filepath) # Get and prepare data products for px file generation from Excel-sheet.
+        self.metadata_base, self.metadata_other  = pxpyfactory.utils.prepare_metadata_base(self.common_meta_filepath) # Get and prepare metadata_base
 
         # Check if there has been any changes to common meta since last production
         if self.production_log.common_meta_change():
@@ -38,7 +38,7 @@ class PXMain:
         sq_file_pairs_written = 0
         # Process each data product:
         for i, row in data_products_df.iterrows():
-            pxpyfactory.utils.print_filter(f"\n--- Start processing data product / table from orderline: {i+2} ---", 1)
+            pxpyfactory.utils.print_filter(f"--- Start processing data product / table from orderline: {i+2} ---", 1)
             px_data_product = pxpyfactory.data_product.PXDataProduct(self, row)
             # Check if input files have changed since last production (Any need for rebuild of px for this table?)
             input_changed = self.production_log.data_product_change(px_data_product)
@@ -58,7 +58,7 @@ class PXMain:
             else:
                 pxpyfactory.utils.print_filter(f"INFO: No changes in input files since last run. Skipping this data product / table.", 1)
 
-        pxpyfactory.utils.print_filter(f"\n--- PX file generation completed. Total PX files written: {px_files_written} (included saved query file pairs: {sq_file_pairs_written}) ---", 0)
+        pxpyfactory.utils.print_filter(f"--- PX file generation completed. Total PX files written: {px_files_written} (included saved query file pairs: {sq_file_pairs_written}) ---", 0)
         if len(px_files_written_ref) > 0:
             pxpyfactory.utils.print_filter(f"PX files written for these tables: {', '.join(px_files_written_ref)}", 0)
         # Log successful productions to production_log with list of tables built
