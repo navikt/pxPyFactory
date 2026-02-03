@@ -1,3 +1,4 @@
+import re # for regular expressions
 import pandas as pd
 from hashlib import sha256
 from itertools import product
@@ -26,6 +27,7 @@ class PXDataProduct:
         self.data_list_pure      = pxpyfactory.utils.prep_list_from_string(dp_row['DATA'], to_upper=False) # keep formatting of data columns since they are used as values
         self.data_precision_list = pxpyfactory.utils.prep_list_from_string(dp_row['DATA'], split_part=1) # get precision part only
         self.units_list          = pxpyfactory.utils.prep_list_from_string(dp_row['UNITS'])
+        self.timeval_list        = pxpyfactory.utils.prep_list_from_string(dp_row['TIMEVAL'])
 
         self.contents_var        = dp_row['CONTENTS']
         self.contvariable        = 'STAT_VAR' # data_list[0] # Column name for contents variable - can probably be anything..
@@ -109,8 +111,10 @@ class PXDataProduct:
         else:
             pxpyfactory.utils.print_filter("Missing or unvalid file for spesific metadata.", 2)
             table_meta = table_meta.reindex(columns=table_meta.columns.tolist() + ['TYPE', 'KEYWORD', 'VALUE'], fill_value=None) # add missing columns to avoid faults
-        table_meta['TYPE'] = table_meta['TYPE'].apply(str.upper)
-        table_meta['KEYWORD'] = table_meta['KEYWORD'].apply(str.upper)
+        
+        # Convert to string and handle NaN values before applying upper()
+        table_meta['TYPE'] = table_meta['TYPE'].astype(str).str.upper()
+        table_meta['KEYWORD'] = table_meta['KEYWORD'].astype(str).str.upper()
 
         self.table_meta_px      = table_meta[table_meta['TYPE'] == 'PX'][['KEYWORD', 'VALUE']] # create df with only px parameters
         self.table_meta_sq      = table_meta[table_meta['TYPE'] == 'SQ'][['KEYWORD', 'VALUE']] # create df with only sq parameters
@@ -170,13 +174,14 @@ class PXDataProduct:
                 self.heading_list.append(column)
         pxpyfactory.utils.print_filter(f"  Updated heading_list: {self.heading_list}", 2)
 
-        # Apply renames to all lists
+        # Apply renames to all lists (rename_map keys are already uppercase from metadata)
         rename_map = self.rename_map
         if rename_map:
             self.data_list = [rename_map.get(item, item) for item in self.data_list]
             self.stub_list = [rename_map.get(item, item) for item in self.stub_list]
             self.heading_list = [rename_map.get(item, item) for item in self.heading_list]
             self.units_list = [rename_map.get(item, item) for item in self.units_list]
+            self.timeval_list = [rename_map.get(item, item) for item in self.timeval_list]
             self.contvariable = rename_map.get(self.contvariable, self.contvariable)
 
         # _____________________________________________________________________________
@@ -216,6 +221,24 @@ class PXDataProduct:
         manual_metadata_updates_dict['VALUES("' + self.contvariable + '")'] = self.data_list #_pure # Values for contents variable must be added first. Must also be in correct formatting
         for key, value in values_dict.items():
             manual_metadata_updates_dict['VALUES("' + key + '")'] = value
+            if key in self.timeval_list:
+                tlist_id = None
+                check_value = value[0]
+                # letters = re.sub(r'[^a-zA-Z]', '', check_value)
+                if check_value.isdigit() and len(check_value) == 4:
+                    tlist_id = 'A1' # Yearly data
+                elif len(check_value) >= 6:
+                    time_code = check_value[4]
+                    if time_code == 'K':
+                        tlist_id = 'Q1' # Quarterly data
+                    elif time_code == 'M':
+                        tlist_id = 'M1' # Monthly data
+                    elif time_code == 'U':
+                        tlist_id = 'W1' # Weekly data
+                    # else:
+                    #     tlist_id = 'x'  # Interval data
+                if tlist_id is not None:
+                    manual_metadata_updates_dict['TIMEVAL("' + key + '")'] = ['TLIST(' + tlist_id + ')'] + value
 
         ## Prepare px-parameters
         # Extract LAST-UPDATED value from metadata, handling missing/duplicate keywords
@@ -223,21 +246,11 @@ class PXDataProduct:
         filtered_df = self.table_meta_px[self.table_meta_px['KEYWORD'] == 'LAST-UPDATED']
         self.table_meta_px = self.table_meta_px[self.table_meta_px['KEYWORD'] != 'LAST-UPDATED']  # Remove used rows
         if filtered_df.empty:
+            # Get from file modification time - this will be timezone-converted
             last_updated_value = pxpyfactory.io_utils.get_last_updated(self.table_path)
         else:
-            last_updated_value = str(filtered_df['VALUE'].iloc[0])  # Get first match as string
-            # ? any need for this: pxpyfactory.utils.get_time_formatted(last_updated_value) ?
-        
-        # Extract CONTACT value from metadata, handling missing/duplicate keywords
-        # If it is not stated in metadata, get last updated time from data file
-        contact_value = self.main_app.metadata_other.get('CONTACT', None)
-        filtered_df = self.table_meta_px[self.table_meta_px['KEYWORD'] == 'CONTACT']
-        if not filtered_df.empty:
-            if contact_value is None:
-                contact_value = str(filtered_df['VALUE'].iloc[0])  # Get first match as string
-            else:
-                contact_value += ' + ' + str(filtered_df['VALUE'].iloc[0])  # Append additional contact info on new line
-        self.table_meta_px = self.table_meta_px[self.table_meta_px['KEYWORD'] != 'CONTACT']  # Remove used rows
+            # Use metadata value as-is without timezone conversion (user has already formatted it correctly)
+            last_updated_value = str(filtered_df['VALUE'].iloc[0]).strip()
 
         # Add px-parameter for each data column:
         for index, data_col in enumerate(self.data_list):
@@ -265,8 +278,6 @@ class PXDataProduct:
             # manual_metadata_updates_dict['SEASADJ("' + data_col + '")'] = 
 
             manual_metadata_updates_dict['LAST-UPDATED("' + data_col + '")'] = last_updated_value
-            if pxpyfactory.utils.valid_value(contact_value):
-                manual_metadata_updates_dict['CONTACT("' + data_col + '")'] = contact_value
 
         return manual_metadata_updates_dict
 
@@ -278,6 +289,8 @@ class PXDataProduct:
 
         metadata_prep = pxpyfactory.utils.metadata_add(metadata_prep, table_meta_px, 'SPESIFIC_VALUE') # Merge the two sources of metadata
         metadata_prep['MANDATORY'] = metadata_prep['MANDATORY'].fillna('').str.lower().isin(['yes', 'nav']).astype(bool) # Mandatory column cleanup 
+        # Prepare CONTACT information
+        metadata_prep = self._prepare_contact_metadata(metadata_prep)
 
         # Set the value to the first non-null value in this priority:
         metadata_prep['VALUE'] = metadata_prep[['SPESIFIC_VALUE', 'MANUAL_VALUE', 'DEFAULT_VALUE']].apply(pxpyfactory.utils.get_first_notnull, axis=1)
@@ -288,6 +301,87 @@ class PXDataProduct:
         fill_value = metadata_prep.loc[metadata_prep['KEYWORD'] == 'DATASYMBOL2', 'VALUE'].iloc[0] # getting the fill value must be done after preparing the metadata values
 
         return metadata_prep, fill_value
+
+    # _____________________________________________________________________________
+    # Swap CONTACT information to match syntax in px-file
+    def _prepare_contact_metadata(self, metadata_prep):
+        # Pop CONTACT information
+        contact_mask = metadata_prep['KEYWORD'].str.split('-').str[0] == 'CONTACT'
+        filtered_contact = metadata_prep[contact_mask].copy()
+        metadata_prep = metadata_prep[~contact_mask]
+
+        if not filtered_contact.empty:
+            pxpyfactory.utils.print_filter('CONTACT metadata filtered_contact before processing:', 1)
+            pxpyfactory.utils.print_filter(filtered_contact, 1)
+            key_tuple = ('CONTACT', 'CONTACT-HEADER', 'not in use 1', 'not in use 2', 'CONTACT-PHONE', 'CONTACT-EMAIL', 'CONTACT-BODY', 'not in use 3') # , 'not in use 4')
+            postfix_tuple = ('', '1', '2', '3')
+            default_contacts = []
+            manual_contacts = []
+            spesific_contacts = []
+
+            for postfix in range(len(postfix_tuple)):
+                default_contact_str = ''
+                manual_contact_str = ''
+                spesific_contact_str = ''
+                for key in range(len(key_tuple)):
+                    row = filtered_contact[filtered_contact['KEYWORD'] == key_tuple[key] + postfix_tuple[postfix]]
+                    if not row.empty:
+                        row_default_value = str(row['DEFAULT_VALUE'].iloc[0]).strip() if pd.notna(row['DEFAULT_VALUE'].iloc[0]) else ''
+                        row_manual_value = str(row['MANUAL_VALUE'].iloc[0]).strip() if pd.notna(row['MANUAL_VALUE'].iloc[0]) else ''
+                        row_spesific_value = str(row['SPESIFIC_VALUE'].iloc[0]).strip() if pd.notna(row['SPESIFIC_VALUE'].iloc[0]) else ''
+                        pxpyfactory.utils.print_filter(f'Processing: {key_tuple[key] + postfix_tuple[postfix]}'
+                              f' | DEFAULT_VALUE: {row_default_value}'
+                              f' | MANUAL_VALUE: {row_manual_value}'
+                              f' | SPESIFIC_VALUE: {row_spesific_value}', 3)
+                        if key == 0:
+                            if row_default_value.count('#') == 7:
+                                default_contacts.append(row_default_value)
+                            if row_manual_value.count('#') == 7:
+                                manual_contacts.append(row_manual_value)
+                            if row_spesific_value.count('#') == 7:
+                                spesific_contacts.append(row_spesific_value)
+                        else:
+                            pxpyfactory.utils.print_filter(f'Adding to contact strings for key: {key_tuple[key] + postfix_tuple[postfix]}', 3)
+                            default_contact_str += row_default_value.replace('#', '')
+                            manual_contact_str += row_manual_value.replace('#', '')
+                            spesific_contact_str += row_spesific_value.replace('#', '')
+                    if key != 0:
+                        # Add empty field if no value is given (except for first key which is handled above)
+                        default_contact_str += '#'
+                        manual_contact_str += '#'
+                        spesific_contact_str += '#'
+
+
+                if (len(default_contact_str) > 7) and (default_contact_str.count('#') == 7):
+                    default_contacts.append(default_contact_str)
+                if (len(manual_contact_str) > 7) and (manual_contact_str.count('#') == 7):
+                    manual_contacts.append(manual_contact_str)
+                if (len(spesific_contact_str) > 7) and (spesific_contact_str.count('#') == 7):
+                    spesific_contacts.append(spesific_contact_str)
+            
+            pxpyfactory.utils.print_filter(f'DEFAULT_VALUE: {"||".join(default_contacts)}', 1)
+            pxpyfactory.utils.print_filter(f'MANUAL_VALUE: {"||".join(manual_contacts)}', 1)
+            pxpyfactory.utils.print_filter(f'SPESIFIC_VALUE: {"||".join(spesific_contacts)}', 1)
+
+            # Merge lists. In pxWeb they all should be viewed as one CONTACT entry
+            spesific_contacts = default_contacts + manual_contacts + spesific_contacts + ['']
+            default_contacts = []
+            manual_contacts = []
+            if len(spesific_contacts) > 0:
+                new_row = pd.DataFrame([{
+                    'KEYWORD': 'CONTACT(' + self.data_list[0] + ')', # Should be added to a data-item
+                    'DEFAULT_VALUE': '||'.join(default_contacts) if len(default_contacts) > 0 else None,
+                    'MANUAL_VALUE': '||'.join(manual_contacts) if len(manual_contacts) > 0 else None,
+                    'SPESIFIC_VALUE': '||'.join(spesific_contacts) if len(spesific_contacts) > 0 else None,
+                    'ORDER': 52,
+                    'MANDATORY': False,
+                    'TYPE': 'text'
+                }])
+                # pxpyfactory.utils.print_filter(new_row, 1)
+
+                metadata_prep = pd.concat([metadata_prep, new_row], ignore_index=True)
+
+        return metadata_prep
 
     # _____________________________________________________________________________
     # Create the data content lines to the px-file.

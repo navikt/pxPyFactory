@@ -1,22 +1,41 @@
-import sys
 import pandas as pd
 import re
+import sys
 from datetime import datetime
 import pxpyfactory.io_utils
 
-input_args = sys.argv[1:] if len(sys.argv) > 1 else []
+# Set the input arguments for the module to use
+input_args = {}
+def set_input_args():
+    global input_args
+    sys_argv = sys.argv[1:] if len(sys.argv) > 1 else []
+    input_args = {}
+    for arg in sys_argv:
+        if '=' in arg:
+            key, value = arg.split('=', 1)  # Split only on first '='
+            # Auto-convert common types
+            if value.lower() in ('true', 'false'):
+                value = value.lower() == 'true'
+            elif value.isdigit():
+                value = int(value)
+            input_args[key] = value
+        else:
+            input_args[arg] = True  # Flag-style argument
+    print_filter(f"Input arguments: {input_args}", 0)
 
-# _____________________________________________________________________________
-def input_arg(arg_index):
-    return input_args[arg_index] if len(input_args) > arg_index else None
-# _____________________________________________________________________________
-def force_build_arg():
-    return input_arg(0)
+def get_input_args(type=None):
+    if type == None:
+        return input_args
+    else:
+        return input_args.get(type, None)
 # _____________________________________________________________________________
 def print_filter(output, priority_level=0):
-    input_arg_print_filter = input_arg(1)
-    arg_filter = int(input_arg_print_filter) if str(input_arg_print_filter).isdigit() else 2 # Last number is the default amount of stuff to print if no input when python is runned
-    if priority_level <= arg_filter:
+    print_level = get_input_args('print')
+    try:
+        print_level = int(print_level)
+    except (ValueError, TypeError):
+        print_level = 0
+    if priority_level <= print_level:
         print(output)
 # _____________________________________________________________________________
 def prepare_data_products(common_meta_filepath):
@@ -34,21 +53,21 @@ def prepare_data_products(common_meta_filepath):
     # data_products.rename(columns={'DATA'          : 'DATA'           }, inplace=True)
     # data_products.rename(columns={'UNITS'         : 'UNITS'          }, inplace=True)
     # data_products.rename(columns={'SEP'           : 'SEP'            }, inplace=True)
+    data_products.rename(columns={'TIDSVARIABEL'  : 'TIMEVAL'        }, inplace=True)
 
     data_products['TABLE_REF_RAW'] = data_products['TABLE_REF']
     data_products['TABLE_REF'] = data_products['TABLE_REF'].apply(_shorten_table_ref)
 
     # Filter based on command line arguments
-    input_arg_force_build = force_build_arg()
-    print(f"Args: {input_arg_force_build}")
-    if input_arg_force_build == None: # No arguments given - build only tables where input has changed
+    force_build_arg = get_input_args('build')
+    if force_build_arg == None: # No arguments given - build only tables where input has changed
         data_products['FORCE_BUILD'] = None
-    elif input_arg_force_build == 'all': # Build all tables, even if input has not changed
+    elif force_build_arg == 'all': # Build all tables, even if input has not changed
         data_products['FORCE_BUILD'] = True
     else: # Build only table specified
         data_products['FORCE_BUILD'] = False
-        data_products.loc[data_products['TABLE_REF'] == input_arg_force_build, 'FORCE_BUILD'] = True
-        data_products.loc[data_products['TABLE_REF_RAW'] == input_arg_force_build, 'FORCE_BUILD'] = True
+        data_products.loc[data_products['TABLE_REF'] == force_build_arg, 'FORCE_BUILD'] = True
+        data_products.loc[data_products['TABLE_REF_RAW'] == force_build_arg, 'FORCE_BUILD'] = True
 
     # Remove data products where BUILD_NOW is not set to 'x' in Excel sheet and FORCE_BUILD is not True or None
     data_products = data_products[(data_products['BUILD_NOW'] == 'x') & (data_products['FORCE_BUILD'] != False)]
@@ -58,7 +77,7 @@ def prepare_data_products(common_meta_filepath):
     data_products = data_products[~duplicates_mask].copy() # Dataframe with unique table numbers (duplicates removed)
 
     print_filter('Data products / tables to create px-files from:', 0)
-    print_filter(data_products[['LEVEL_1', 'LEVEL_2', 'TABLE_REF', 'TITLE', 'STUB', 'HEADING', 'DATA', 'UNITS']], 0)
+    print_filter(data_products[['LEVEL_1', 'LEVEL_2', 'TABLE_REF', 'TITLE', 'STUB', 'HEADING', 'DATA', 'UNITS', 'TIMEVAL']], 0)
     if duplicates_df.shape[0] > 0:
         print_filter('--- Duplicated table numbers (will be skipped):', 0)
         print_filter(duplicates_df, 0)
@@ -89,15 +108,8 @@ def prepare_metadata_base(common_meta_filepath):
     meta_default = meta_default[['ORDER','KEYWORD','MANDATORY','DEFAULT_VALUE','TYPE']] # Keep only relevant columns
     meta_manual = pxpyfactory.io_utils.file_read(common_meta_filepath, sheet_name='metadata-manual') # Manual updates on values for some keywords (can be empty) 
     metadata_base = metadata_add(meta_default, meta_manual, 'MANUAL_VALUE') # Adds the column 'manual_value' to 'meta_default'. The value is from 'meta_manual' (match on keyword)
-    metadata_other = {} # Metadata that will be handled separately for each data product
+    return metadata_base
 
-    # Pop common CONTACT information - it will be merged with spesific CONTACT for each data product later
-    filtered_contact = metadata_base[metadata_base['KEYWORD'] == 'CONTACT'].copy()
-    metadata_base = metadata_base[metadata_base['KEYWORD'] != 'CONTACT']
-    if not filtered_contact.empty:
-        metadata_other['CONTACT'] = str(filtered_contact[['MANUAL_VALUE', 'DEFAULT_VALUE']].apply(pxpyfactory.utils.get_first_notnull, axis=1).iloc[0])
-
-    return metadata_base, metadata_other
 # _____________________________________________________________________________
 def prepare_alias(common_meta_filepath):
     # Prepare alias folder names from Excel-sheets - common for all data products
@@ -142,6 +154,9 @@ def update_folder_structure(data_products_df, alias_df, output_path):
 def metadata_add(metadata, amendment_df, new_column_name):
     metadata[new_column_name] = None
     for idx, row in metadata.iterrows():
+        # amendment_key = amendment_df['KEYWORD'].astype(str)
+        # row_key = str(row['KEYWORD'])
+        # match = amendment_df[(amendment_key == row_key) | (amendment_key.str.startswith(row_key + '-'))]
         match = amendment_df[amendment_df['KEYWORD'] == row['KEYWORD']]
         if not match.empty:
             metadata.at[idx, new_column_name] = match.iloc[0]['VALUE']
@@ -153,11 +168,19 @@ def metadata_add(metadata, amendment_df, new_column_name):
 def update_metadata(metadata, column, updates_dict, mandatory=True, order=500):
     for keyword, new_value in updates_dict.items():
         mask = metadata['KEYWORD'] == keyword
-        print(f"Updating SUBJECT_CODE to: {new_value}") if keyword == 'SUBJECT_CODE' else None
         if mask.sum() == 0: # The keyword does not exist, so we add a new row
             value_type = 'text'
             if isinstance(new_value, int):
                 value_type = 'integer'
+            
+            # Extract base keyword to inherit ORDER from base parameter
+            # E.g., VALUES("AAR") → VALUES, TIMEVAL("AAR") → TIMEVAL
+            base_keyword = keyword.split('(')[0] if '(' in keyword else keyword
+            base_mask = metadata['KEYWORD'] == base_keyword
+            if base_mask.sum() > 0:
+                # Use ORDER from base keyword
+                order = metadata.loc[metadata.index[base_mask][0], 'ORDER']
+            
             new_row = pd.Series({'KEYWORD': keyword, column: new_value, 'MANDATORY': mandatory, 'TYPE': value_type, 'ORDER': order}).reindex(metadata.columns)
             metadata = pd.concat([metadata, new_row.to_frame().T], ignore_index=True)
         elif mask.sum() == 1: # Only one entry found for the keyword, so we update it
@@ -187,7 +210,12 @@ def serialize_to_px_format(metadata, data_lines):
         elif isinstance(row_value, str):
             value_out = '"' + row_value + '"'
         elif isinstance(row_value, list):
-            if all(isinstance(x, str) for x in row_value):
+            # Special handling for TIMEVAL with TLIST - first element should not be quoted
+            if 'TIMEVAL' in row_keyword and len(row_value) > 0 and row_value[0].startswith('TLIST('):
+                tlist_part = row_value[0]  # Keep TLIST unquoted
+                remaining_values = row_value[1:]  # Rest should be quoted
+                value_out = tlist_part + ', "' + '", "'.join(remaining_values) + '"'
+            elif all(isinstance(x, str) for x in row_value):
                 value_out = '"' + '", "'.join(row_value) + '"'
             elif any(isinstance(x, str) for x in row_value):
                 value_out = '"' + '", "'.join([str(x) for x in row_value]) + '"'
@@ -196,7 +224,7 @@ def serialize_to_px_format(metadata, data_lines):
         elif row_type == 'text':
             value_out = '"' + str(row_value) + '"'
         else:
-            print(f"Unclear type for: keyword={row_keyword}, value={row_value}, type desc={row_type}, type of current value={type(row_value)})")
+            print_filter(f"Unclear type for: keyword={row_keyword}, value={row_value}, type desc={row_type}, type of current value={type(row_value)})", 0)
             value_out = '"' + str(row_value) + '"'
         list_of_lines_to_px.append(f'{row_keyword}={value_out};')
     return list_of_lines_to_px
@@ -231,7 +259,7 @@ def alert_missing_mandatory(metadata):
         mandatory_and_missing.remove('DATA')
     except ValueError:
         pass  # Do nothing if the string is not in the list
-    print(f"Missing mandatory keywords: {', '.join(mandatory_and_missing)}") if len(mandatory_and_missing) > 0 else None
+    print_filter(f"Missing mandatory keywords: {', '.join(mandatory_and_missing)}", 0) if len(mandatory_and_missing) > 0 else None
     # raise ValueError(f"Missing mandatory keywords: {', '.join(mandatory_and_missing)}")
 # _____________________________________________________________________________
 def valid_value_or_none(value, full=False):
@@ -286,8 +314,13 @@ def get_time_formatted(timestamp=None):
     if timestamp is None:
         return_time = datetime.now()
     elif isinstance(timestamp, datetime):
-        return_time = timestamp
+        # If datetime has timezone info, convert to local time
+        if timestamp.tzinfo is not None:
+            return_time = timestamp.astimezone()
+        else:
+            return_time = timestamp
     else:
+        # Convert timestamp to local time (assumes timestamp is Unix time)
         return_time = datetime.fromtimestamp(float(timestamp))
     return return_time.strftime("%Y%m%d %H:%M")
     # if seconds: return return_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -312,3 +345,4 @@ def is_list_empty(check_list):
         return True
     else:
         return False
+

@@ -23,7 +23,7 @@ def get_last_updated(in_path):
     file_size, raw_time = get_file_info(in_path)
     if raw_time is None:
         return ''
-    return raw_time.strftime("%y%m%d")
+    return pxpyfactory.utils.get_time_formatted(raw_time)
 
 # _____________________________________________________________________________
 def get_path_info(in_path, ignore=None):
@@ -97,7 +97,7 @@ def file_read(file_path, sheet_name='Ark1', sep=';', header=0, clean=True):
         elif file_path.endswith('.csv'):
             content = read_gcs_file(file_path)
              # Use python engine if sep is None to auto-detect separator, else default engine (engine is not spesified)
-            df = pd.read_csv(io.StringIO(content), sep=sep, header=header, **({'engine': 'python'} if sep is None else {}))
+            df = pd.read_csv(io.StringIO(content), sep=sep, decimal=',', header=header, **({'engine': 'python'} if sep is None else {}))
         elif file_path.endswith('.jsonl'):
             content = read_gcs_file(file_path)
             df = pd.read_json(io.StringIO(content), lines=True, convert_dates=False)
@@ -112,17 +112,11 @@ def file_read(file_path, sheet_name='Ark1', sep=';', header=0, clean=True):
 # _____________________________________________________________________________
 # Create folder from path if it does not exist, and write file in it
 def file_write(file_path, content):
-    return write_gcs_file(file_path, content)
-# _____________________________________________________________________________
-# Save a list of lines to a .px file
-# Return True if successful writing to file, False otherwise
-def write_px(list_of_lines, file_path):
-    if file_path is None: # Print to console if no file path is given
-        pxpyfactory.utils.print_filter('#'*80, 0)
-        for line in list_of_lines:
+    if pxpyfactory.utils.get_input_args('test'): # Print to console if no file path is given
+        pxpyfactory.utils.print_filter('/// file_write - ' + file_path + ' \\\\\\', 0)
+        for line in content.split('\n'):
             pxpyfactory.utils.print_filter(line[:200], 0)
-        pxpyfactory.utils.print_filter('#'*80, 0)
+        pxpyfactory.utils.print_filter('\\\\\\ file_write - ' + file_path + ' ///', 0)
         return False
     else:
-        return write_gcs_file(file_path, "\n".join(list_of_lines))
-# _____________________________________________________________________________
+        return write_gcs_file(file_path, content)
