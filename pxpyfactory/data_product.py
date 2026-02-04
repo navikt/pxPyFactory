@@ -18,7 +18,7 @@ class PXDataProduct:
         self.table_ref_raw       = dp_row['TABLE_REF_RAW'] # Table ref from input/excel before shortening
         self.table_name          = dp_row['TITLE']
         self.table_sep           = dp_row['SEP'] # Separator used in .csv-file (used for reading input file)
-        self.subject_code        = dp_row['LEVEL_1']
+        self.subject_code        = dp_row['ICON'] if pxpyfactory.utils.valid_value(dp_row['ICON']) else dp_row['LEVEL_1']  
         self.subject_area        = dp_row['LEVEL_1'] # todo: update to show the name of the subject area
 
         self.stub_list           = pxpyfactory.utils.prep_list_from_string(dp_row['STUB'])

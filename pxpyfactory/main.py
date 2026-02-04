@@ -20,17 +20,22 @@ class PXMain:
         pxpyfactory.utils.set_input_args()
 
         # Check if there has been any changes to input files since last production
+        if pxpyfactory.utils.get_input_args('clean'):
+            pxpyfactory.utils.print_filter(f"--- Clean (delete all content in output folder before creating new structure) ---", 0)
+            pxpyfactory.io_utils.delete_content_in_path(self.output_path) # Clean output folder before creating new structure
+    
+        # Check if there has been any changes to input files since last production
         if not self.production_log.input_change() and pxpyfactory.utils.get_input_args('build') is None:
             pxpyfactory.utils.print_filter(f"--- Content in input folder has not changed since last run (exit)---", 0)
             return
 
         data_products_df = pxpyfactory.utils.prepare_data_products(self.common_meta_filepath) # Get and prepare data products for px file generation from Excel-sheet.
-        self.metadata_base  = pxpyfactory.utils.prepare_metadata_base(self.common_meta_filepath) # Get and prepare metadata_base
+        self.metadata_base = pxpyfactory.utils.prepare_metadata_base(self.common_meta_filepath) # Get and prepare metadata_base
 
         # Check if there has been any changes to common meta since last production
         if self.production_log.common_meta_change() or pxpyfactory.utils.get_input_args('build') == 'all':
             pxpyfactory.utils.print_filter(f"--- Content in common meta has changed since last run (rebuild aliases and folders) ---", 1)
-            self.alias_df       = pxpyfactory.utils.prepare_alias(self.common_meta_filepath) # Get and prepare alias
+            self.alias_df = pxpyfactory.utils.prepare_alias(self.common_meta_filepath) # Get and prepare alias
             pxpyfactory.utils.update_folder_structure(data_products_df, self.alias_df, self.output_path) # Create folder structure from data_products dataframe
             self.production_log.alias_built = True
         else:

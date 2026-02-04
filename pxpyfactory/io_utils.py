@@ -26,6 +26,18 @@ def get_last_updated(in_path):
     return pxpyfactory.utils.get_time_formatted(raw_time)
 
 # _____________________________________________________________________________
+# Clean output folder before creating new structure
+def delete_content_in_path(folder_path):
+    if not folder_path.endswith('/'):
+        folder_path += '/'
+    blobs = storage_client.list_blobs(bucket_name, prefix=folder_path)
+    for blob in blobs:
+        try:
+            blob.delete()
+            pxpyfactory.utils.print_filter(f"Deleted: {blob.name}", 1)
+        except Exception as e:
+            pxpyfactory.utils.print_filter(f"Error deleting file {blob.name} from bucket {bucket_name}: {e}", 1)
+# _____________________________________________________________________________
 def get_path_info(in_path, ignore=None):
     # Determine if path is a file or folder
     if '.' in in_path:

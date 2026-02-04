@@ -43,6 +43,7 @@ def prepare_data_products(common_meta_filepath):
     data_products = data_products.map(lambda x: str(x) if pd.notnull(x) else None) # Force content in excel sheet to just strings for easier use (None for empty cells)
     # Column referances in the data_products sheet
     data_products.rename(columns={'BYGG_NAA'      : 'BUILD_NOW'      }, inplace=True)
+    data_products.rename(columns={'IKON'          : 'ICON'           }, inplace=True) # område oversettes noen ganger i Nav til field
     data_products.rename(columns={'OMRAADE'       : 'LEVEL_1'        }, inplace=True) # område oversettes noen ganger i Nav til field
     data_products.rename(columns={'TEMA'          : 'LEVEL_2'        }, inplace=True) # tema oversettes ofte i Nav til theme
     data_products.rename(columns={'NUMMER'        : 'TABLE_REF'      }, inplace=True)
@@ -77,7 +78,7 @@ def prepare_data_products(common_meta_filepath):
     data_products = data_products[~duplicates_mask].copy() # Dataframe with unique table numbers (duplicates removed)
 
     print_filter('Data products / tables to create px-files from:', 0)
-    print_filter(data_products[['LEVEL_1', 'LEVEL_2', 'TABLE_REF', 'TITLE', 'STUB', 'HEADING', 'DATA', 'UNITS', 'TIMEVAL']], 0)
+    print_filter(data_products[['ICON', 'LEVEL_2', 'TABLE_REF', 'TITLE', 'STUB', 'HEADING', 'DATA', 'UNITS', 'TIMEVAL']], 0)
     if duplicates_df.shape[0] > 0:
         print_filter('--- Duplicated table numbers (will be skipped):', 0)
         print_filter(duplicates_df, 0)
