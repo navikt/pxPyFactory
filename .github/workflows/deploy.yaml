@@ -22,7 +22,7 @@ jobs:
         uses: nais/docker-build-push@v0
         id: docker-build-push
         with:
-          team: dvh-analytisk-plattform
+          team: statistikkbank
           salsa: true
 
   deploy-dev:

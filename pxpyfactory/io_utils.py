@@ -2,11 +2,23 @@ from google.cloud import storage # Imports the Google Cloud client library
 import pandas as pd
 import io
 import pxpyfactory.utils
+import pxpyfactory.config
 
 storage_client = storage.Client() # Instantiates a client
-# bucket_name = "pxweb2-api-nais-test" # The name for the new bucket
-bucket_name = "pxweb2-api-nais-px" # The name for the new bucket
-bucket = storage_client.bucket(bucket_name)
+
+# Setup both buckets
+bucket_input = storage_client.bucket(pxpyfactory.config.gcs.BUCKET_INPUT)
+bucket_output = storage_client.bucket(pxpyfactory.config.gcs.BUCKET_OUTPUT)
+
+# Helper to determine which bucket to use based on path
+def get_bucket_for_path(file_path):
+    """Returns appropriate bucket based on file path"""
+    # Output bucket: PX files and saved queries
+    if file_path.startswith(('px/', 'sq/', pxpyfactory.config.paths.OUTPUT + '/', pxpyfactory.config.paths.SAVED_QUERY_OUTPUT + '/')):
+        return bucket_output, pxpyfactory.config.gcs.BUCKET_OUTPUT
+    # Input bucket: everything else (CSV, Excel, logs, work files)
+    else:
+        return bucket_input, pxpyfactory.config.gcs.BUCKET_INPUT
 
 # _____________________________________________________________________________
 def get_path(path_parts):
@@ -14,6 +26,7 @@ def get_path(path_parts):
 # _____________________________________________________________________________
 def file_exists(file_path):
     try:
+        bucket, _ = get_bucket_for_path(file_path)
         return storage.Blob(bucket=bucket, name=file_path).exists(storage_client)
     except Exception as e:
         pxpyfactory.utils.print_filter(f"Error checking file existence {file_path}: {e}", 1)
@@ -22,7 +35,7 @@ def file_exists(file_path):
 def get_last_updated(in_path):
     file_size, raw_time = get_file_info(in_path)
     if raw_time is None:
-        return ''
+        return '' 
     return pxpyfactory.utils.get_time_formatted(raw_time)
 
 # _____________________________________________________________________________
@@ -30,6 +43,7 @@ def get_last_updated(in_path):
 def delete_content_in_path(folder_path):
     if not folder_path.endswith('/'):
         folder_path += '/'
+    bucket, bucket_name = get_bucket_for_path(folder_path)
     blobs = storage_client.list_blobs(bucket_name, prefix=folder_path)
     for blob in blobs:
         try:
@@ -49,6 +63,7 @@ def get_path_info(in_path, ignore=None):
 # _____________________________________________________________________________
 def get_file_info(file_path):
     if file_exists(file_path):
+        bucket, _ = get_bucket_for_path(file_path)
         file_blob = bucket.get_blob(file_path)
         file_size = file_blob.size # Get file size in bytes
         raw_time = file_blob.updated # Get last modified time (as a timestamp)
@@ -61,6 +76,7 @@ def get_file_info(file_path):
 def get_folder_info(folder_path, ignore=None):
     if not folder_path.endswith('/'):
         folder_path += '/'
+    bucket, bucket_name = get_bucket_for_path(folder_path)
     blobs = storage_client.list_blobs(bucket_name, prefix=folder_path)
     total_size = 0
     latest_time = None
@@ -75,6 +91,7 @@ def get_folder_info(folder_path, ignore=None):
 # Reads a file from Google Cloud Storage and returns its content as a string.
 def read_gcs_file(source_blob_name, download_as_bytes=False):
     try:
+        bucket, bucket_name = get_bucket_for_path(source_blob_name)
         blob = bucket.blob(source_blob_name)
         if download_as_bytes:
           content = blob.download_as_bytes()
@@ -82,16 +99,19 @@ def read_gcs_file(source_blob_name, download_as_bytes=False):
           content = blob.download_as_text()
         return content
     except Exception as e:
+        bucket, bucket_name = get_bucket_for_path(source_blob_name)
         pxpyfactory.utils.print_filter(f"Error reading file {source_blob_name} from bucket {bucket_name}: {e}", 1)
         return None
 # _____________________________________________________________________________
 # Write content to a file in Google Cloud Storage. If file dont exist, it is created.
 def write_gcs_file(destination_blob_name, content):
     try:
+        bucket, bucket_name = get_bucket_for_path(destination_blob_name)
         blob = bucket.blob(str(destination_blob_name))
         blob.upload_from_string(str(content))
         return True
     except Exception as e:
+        bucket, bucket_name = get_bucket_for_path(destination_blob_name)
         pxpyfactory.utils.print_filter(f"Error writing file {destination_blob_name} to bucket {bucket_name}: {e}", 1)
         return False
 # _____________________________________________________________________________

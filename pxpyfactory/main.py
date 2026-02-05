@@ -78,9 +78,9 @@ class PXMain:
             if not pxpyfactory.utils.get_input_args('no_deploy'):
                 self.trigger_deployment()
 
-    def trigger_deployment(self, environment='test-px', branch='main'):
+    def trigger_deployment(self, environment=None, branch=None):
         """
-        Trigger deployment workflow on pxweb2-api-nais repository
+        Trigger deployment workflow on api repository
         See deployment.py for implementation details
         """
         deployment_success = pxpyfactory.deployment.trigger_github_deployment(environment, branch)

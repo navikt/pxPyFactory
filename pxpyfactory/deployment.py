@@ -1,38 +1,41 @@
 import requests
 import os
 import pxpyfactory.utils
+import pxpyfactory.config
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
 
 
-def trigger_github_deployment(environment='test-px', branch='main'):
+def trigger_github_deployment(environment=None, branch=None):
     """
     Trigger deployment workflow on pxweb2-api-nais repository
     
     Args:
-        environment: Environment to deploy to (default: 'test-px')
-        branch: Branch to deploy from (default: 'main')
+        environment: Environment to deploy to (default from config)
+        branch: Branch to deploy from (default from config)
     
     Returns:
         bool: True if deployment was triggered successfully, False otherwise
     """
-    github_token = os.environ.get('GITHUB_TOKEN_PX')
+    # Use config defaults if not specified
+    if environment is None:
+        environment = pxpyfactory.config.github.DEFAULT_ENVIRONMENT
+    if branch is None:
+        branch = pxpyfactory.config.github.DEFAULT_BRANCH
+    
+    github_token = os.environ.get(pxpyfactory.config.github.ENV_VAR_TOKEN)
     if not github_token:
-        pxpyfactory.utils.print_filter("ERROR: GITHUB_TOKEN_PX environment variable not set", 0)
+        pxpyfactory.utils.print_filter(f"ERROR: {pxpyfactory.config.github.ENV_VAR_TOKEN} environment variable not set", 0)
         return False
     
-    owner = 'navikt'
-    repo = 'pxweb2-api-nais'
-    workflow_file = 'deploy.yml'
-    
-    url = f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_file}/dispatches"
+    url = f"https://api.github.com/repos/{pxpyfactory.config.github.OWNER}/{pxpyfactory.config.github.REPO}/actions/workflows/{pxpyfactory.config.github.WORKFLOW_FILE}/dispatches"
     
     headers = {
-        'Accept': 'application/vnd.github+json',
+        'Accept': pxpyfactory.config.github.ACCEPT_HEADER,
         'Authorization': f'Bearer {github_token}',
-        'X-GitHub-Api-Version': '2022-11-28'
+        'X-GitHub-Api-Version': pxpyfactory.config.github.API_VERSION
     }
     
     data = {
@@ -47,7 +50,7 @@ def trigger_github_deployment(environment='test-px', branch='main'):
     try:
         response = requests.post(url, headers=headers, json=data)
         
-        if response.status_code == 204:
+        if response.status_code == pxpyfactory.config.github.SUCCESS_STATUS_CODE:
             pxpyfactory.utils.print_filter(f"✓ Deployment triggered successfully", 0)
             return True
         else:
