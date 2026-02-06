@@ -24,6 +24,6 @@ spec:
         # No lifecycle rules - keep files indefinitely for API to serve
       
       # Output bucket - shared with pxWeb API, published PX files are stored here
-      - name: pxweb-api-input
+      - name: pxpyfactory-output # "pxweb-api-input"
         # No lifecycle rules - keep files indefinitely for API to serve
 

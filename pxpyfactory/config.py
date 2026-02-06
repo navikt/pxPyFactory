@@ -17,7 +17,7 @@ class GoogleCloudStorage:
     BUCKET_INPUT = "pxpyfactory-input"
     
     # Output bucket - Generated PX files (shared with API)
-    BUCKET_OUTPUT = "pxweb-api-input"
+    BUCKET_OUTPUT = "pxpyfactory-output" # "pxweb-api-input"
 
 
 @dataclass
