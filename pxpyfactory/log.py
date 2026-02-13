@@ -64,7 +64,7 @@ class PXLog:
         current_dict = {
             'timestamp': pxpyfactory.utils.get_time_formatted(),
             'type': 'table',
-            'table_ref': data_product.table_ref,
+            'tableid': data_product.tableid,
             'hashed_params': data_product.hashed_params,
             'size': size if size is not None else '-',
             'time': pxpyfactory.utils.get_time_formatted(time) if time is not None else '-',
@@ -74,11 +74,11 @@ class PXLog:
 
         return current_dict
 # _____________________________________________________________________________
-    def _get_latest_entry(self, type, table_ref=None):
+    def _get_latest_entry(self, type, tableid=None):
             try:
                 log_history_filtered = self.log_history[self.log_history['type'] == type]
-                if table_ref is not None:
-                    log_history_filtered = log_history_filtered[log_history_filtered['table_ref'] == table_ref]
+                if tableid is not None:
+                    log_history_filtered = log_history_filtered[log_history_filtered['tableid'] == tableid]
                 return log_history_filtered.sort_values('timestamp').iloc[-1]
             except Exception as e:
                 pxpyfactory.utils.print_filter(f"No prior production logged.", 2)
@@ -103,7 +103,7 @@ class PXLog:
 # Compare current object to latest logged item of the same object
     def data_product_change(self, data_product):
         pxpyfactory.utils.print_filter(f"data_product_change({data_product})", 3)
-        latest_entry = self._get_latest_entry('table', data_product.table_ref)
+        latest_entry = self._get_latest_entry('table', data_product.tableid)
         current_entry = self._get_current_data_product_entry(data_product)
         keys_to_check = ['hashed_params', 'size', 'time', 'meta_size', 'meta_time']
         return self._check_diff(latest_entry, current_entry, keys_to_check)

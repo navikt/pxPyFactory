@@ -24,7 +24,7 @@ class GoogleCloudStorage:
 class GitHubConfig:
     """GitHub deployment configuration"""
     OWNER = "navikt"
-    REPO = "pxweb2-api-nais"
+    REPO = "pxweb-api"
     WORKFLOW_FILE = "deploy.yml"
     DEFAULT_ENVIRONMENT = "dev"
     DEFAULT_BRANCH = "main"
@@ -77,19 +77,18 @@ class ExcelSheetNames:
 @dataclass
 class DataProductColumns:
     """Column names in the data products sheet"""
-    BUILD_NOW = "BUILD_NOW"
-    ICON = "ICON"
-    LEVEL_1 = "LEVEL_1"
-    LEVEL_2 = "LEVEL_2"
-    TABLE_REF = "TABLE_REF"
-    TABLE_REF_RAW = "TABLE_REF_RAW"
+    BUILD = "BUILD"
+    SUBJECT_CODE = "SUBJECT-CODE"
+    SUBJECT_AREA = "SUBJECT-AREA"
+    SUBJECT = "SUBJECT"
+    TABLEID = "TABLEID"
+    TABLEID_RAW = "TABLEID_RAW"
     TITLE = "TITLE"
     CONTENTS = "CONTENTS"
     STUB = "STUB"
     HEADING = "HEADING"
     DATA = "DATA"
     UNITS = "UNITS"
-    SEP = "SEP"
     TIMEVAL = "TIMEVAL"
     FORCE_BUILD = "FORCE_BUILD"
 
@@ -127,7 +126,7 @@ class LogColumns:
     """Column names in log entries"""
     TIMESTAMP = "timestamp"
     TYPE = "type"
-    TABLE_REF = "table_ref"
+    TABLEID = "tableid"
     HASHED_PARAMS = "hashed_params"
     SIZE = "size"
     TIME = "time"
@@ -154,7 +153,7 @@ class Defaults:
     HEADER_ROW = 0
     FILL_ITEM = "."
     CONTVARIABLE_NAME = "STAT_VAR"
-    TABLE_REF_MAX_LENGTH = 20
+    TABLEID_MAX_LENGTH = 20
     MAX_SQ_CELLS = 500000  # Maximum cells viewable in pxWeb2
 
 

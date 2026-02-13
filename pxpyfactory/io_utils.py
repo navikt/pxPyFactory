@@ -10,15 +10,40 @@ storage_client = storage.Client() # Instantiates a client
 bucket_input = storage_client.bucket(pxpyfactory.config.gcs.BUCKET_INPUT)
 bucket_output = storage_client.bucket(pxpyfactory.config.gcs.BUCKET_OUTPUT)
 
-# Helper to determine which bucket to use based on path
-def get_bucket_for_path(file_path):
+
+# _____________________________________________________________________________
+def _is_path_to_file(in_path):
+    # Determine if path is a file or folder
+    if '.' in in_path:
+        return True
+    if '/' in in_path:
+        return False
+    else:
+        return None
+
+# _____________________________________________________________________________
+def _get_full_path(in_path):
+        path_is_to_file = _is_path_to_file(in_path)
+        if (not path_is_to_file) and (not in_path.endswith('/')):
+            in_path += '/'
+
+# _____________________________________________________________________________
+def _get_blob_or_blobs(in_path):
     """Returns appropriate bucket based on file path"""
     # Output bucket: PX files and saved queries
-    if file_path.startswith(('px/', 'sq/', pxpyfactory.config.paths.OUTPUT + '/', pxpyfactory.config.paths.SAVED_QUERY_OUTPUT + '/')):
-        return bucket_output, pxpyfactory.config.gcs.BUCKET_OUTPUT
+    if in_path.startswith(('px/', 'sq/', pxpyfactory.config.paths.OUTPUT + '/', pxpyfactory.config.paths.SAVED_QUERY_OUTPUT + '/')):
+        bucket = bucket_output
+        bucket_name = pxpyfactory.config.gcs.BUCKET_OUTPUT
     # Input bucket: everything else (CSV, Excel, logs, work files)
     else:
-        return bucket_input, pxpyfactory.config.gcs.BUCKET_INPUT
+         bucket = bucket_input
+         bucket_name = pxpyfactory.config.gcs.BUCKET_INPUT
+         
+    if _is_path_to_file(in_path):
+        return bucket.blob(in_path)
+    else:
+        return storage_client.list_blobs(bucket_name, prefix=in_path)
+# _____________________________________________________________________________
 
 # _____________________________________________________________________________
 def get_path(path_parts):
@@ -26,8 +51,8 @@ def get_path(path_parts):
 # _____________________________________________________________________________
 def file_exists(file_path):
     try:
-        bucket, _ = get_bucket_for_path(file_path)
-        return storage.Blob(bucket=bucket, name=file_path).exists(storage_client)
+        file_blob = _get_blob_or_blobs(file_path)
+        return file_blob.exists()
     except Exception as e:
         pxpyfactory.utils.print_filter(f"Error checking file existence {file_path}: {e}", 1)
         return False
@@ -43,28 +68,26 @@ def get_last_updated(in_path):
 def delete_content_in_path(folder_path):
     if not folder_path.endswith('/'):
         folder_path += '/'
-    bucket, bucket_name = get_bucket_for_path(folder_path)
-    blobs = storage_client.list_blobs(bucket_name, prefix=folder_path)
+    blobs = _get_blob_or_blobs(folder_path)
     for blob in blobs:
         try:
             blob.delete()
             pxpyfactory.utils.print_filter(f"Deleted: {blob.name}", 1)
         except Exception as e:
-            pxpyfactory.utils.print_filter(f"Error deleting file {blob.name} from bucket {bucket_name}: {e}", 1)
+            pxpyfactory.utils.print_filter(f"Error deleting file {blob.name}: {e}", 1)
 # _____________________________________________________________________________
 def get_path_info(in_path, ignore=None):
     # Determine if path is a file or folder
     if '.' in in_path:
         return get_file_info(in_path)
     else:
-        return get_folder_info(in_path, ignore=ignore)
+        return _get_folder_info(in_path, ignore=ignore)
     # if '.' in path.split('/')[-1]:
 
 # _____________________________________________________________________________
 def get_file_info(file_path):
     if file_exists(file_path):
-        bucket, _ = get_bucket_for_path(file_path)
-        file_blob = bucket.get_blob(file_path)
+        file_blob = _get_blob_or_blobs(file_path)
         file_size = file_blob.size # Get file size in bytes
         raw_time = file_blob.updated # Get last modified time (as a timestamp)
         # mod_time = datetime.fromtimestamp(raw_time) #.strftime("%Y%m%d %H:%M:%S")
@@ -73,11 +96,10 @@ def get_file_info(file_path):
     else:
         return None, None
 # _____________________________________________________________________________
-def get_folder_info(folder_path, ignore=None):
+def _get_folder_info(folder_path, ignore=None):
     if not folder_path.endswith('/'):
         folder_path += '/'
-    bucket, bucket_name = get_bucket_for_path(folder_path)
-    blobs = storage_client.list_blobs(bucket_name, prefix=folder_path)
+    blobs = _get_blob_or_blobs(folder_path)
     total_size = 0
     latest_time = None
     for blob in blobs:
@@ -89,30 +111,26 @@ def get_folder_info(folder_path, ignore=None):
     return total_size, latest_time
 # _____________________________________________________________________________
 # Reads a file from Google Cloud Storage and returns its content as a string.
-def read_gcs_file(source_blob_name, download_as_bytes=False):
+def _read_gcs_file(file_path, download_as_bytes=False):
     try:
-        bucket, bucket_name = get_bucket_for_path(source_blob_name)
-        blob = bucket.blob(source_blob_name)
+        file_blob = _get_blob_or_blobs(file_path)
         if download_as_bytes:
-          content = blob.download_as_bytes()
+          content = file_blob.download_as_bytes()
         else:
-          content = blob.download_as_text()
+          content = file_blob.download_as_text()
         return content
     except Exception as e:
-        bucket, bucket_name = get_bucket_for_path(source_blob_name)
-        pxpyfactory.utils.print_filter(f"Error reading file {source_blob_name} from bucket {bucket_name}: {e}", 1)
+        pxpyfactory.utils.print_filter(f"Error reading file {file_path}: {e}", 1)
         return None
 # _____________________________________________________________________________
 # Write content to a file in Google Cloud Storage. If file dont exist, it is created.
-def write_gcs_file(destination_blob_name, content):
+def _write_gcs_file(file_path, content):
     try:
-        bucket, bucket_name = get_bucket_for_path(destination_blob_name)
-        blob = bucket.blob(str(destination_blob_name))
-        blob.upload_from_string(str(content))
+        file_blob = _get_blob_or_blobs(file_path)
+        file_blob.upload_from_string(str(content))
         return True
     except Exception as e:
-        bucket, bucket_name = get_bucket_for_path(destination_blob_name)
-        pxpyfactory.utils.print_filter(f"Error writing file {destination_blob_name} to bucket {bucket_name}: {e}", 1)
+        pxpyfactory.utils.print_filter(f"Error writing file {file_path}: {e}", 1)
         return False
 # _____________________________________________________________________________
 # Reads content from Excel or CSV files and returns a DataFrame
@@ -124,14 +142,14 @@ def file_read(file_path, sheet_name='Ark1', sep=';', header=0, clean=True):
         return df
     try:
         if file_path.endswith('.xlsx'):
-            content = read_gcs_file(file_path, download_as_bytes=True)
+            content = _read_gcs_file(file_path, download_as_bytes=True)
             df = pd.read_excel(io.BytesIO(content), sheet_name=sheet_name, header=header)
         elif file_path.endswith('.csv'):
-            content = read_gcs_file(file_path)
+            content = _read_gcs_file(file_path)
              # Use python engine if sep is None to auto-detect separator, else default engine (engine is not spesified)
             df = pd.read_csv(io.StringIO(content), sep=sep, decimal=',', header=header, **({'engine': 'python'} if sep is None else {}))
         elif file_path.endswith('.jsonl'):
-            content = read_gcs_file(file_path)
+            content = _read_gcs_file(file_path)
             df = pd.read_json(io.StringIO(content), lines=True, convert_dates=False)
         else:
             raise ValueError("Unsupported file type")
@@ -151,4 +169,4 @@ def file_write(file_path, content):
         pxpyfactory.utils.print_filter('\\\\\\ file_write - ' + file_path + ' ///', 0)
         return False
     else:
-        return write_gcs_file(file_path, content)
+        return _write_gcs_file(file_path, content)

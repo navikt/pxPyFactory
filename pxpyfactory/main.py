@@ -59,7 +59,7 @@ class PXMain:
                         # If logging is successful, print confirmation
                         pxpyfactory.utils.print_filter(f"PX file successfully written: {px_data_product.px_output_path}", 1)
                         px_files_written += 1
-                        px_files_written_ref.append(px_data_product.table_ref)
+                        px_files_written_ref.append(px_data_product.tableid)
                         if px_data_product.make_sq(): # Create a standard Saved Query for the px file
                             pxpyfactory.utils.print_filter("Saved Query files generated", 1)
                             sq_file_pairs_written += 1

@@ -14,12 +14,11 @@ class PXDataProduct:
         self.force_build         = dp_row.pop('FORCE_BUILD')
         self.hashed_params       = sha256(dp_row.to_string().encode()).hexdigest() # Store hashed parameters to detect changes in input files
 
-        self.table_ref           = '' + dp_row['TABLE_REF'] # Nav uses NAV_ as a prefix for table numbers
-        self.table_ref_raw       = dp_row['TABLE_REF_RAW'] # Table ref from input/excel before shortening
+        self.tableid             = '' + dp_row['TABLEID'] # Nav uses NAV_ as a prefix for table numbers
+        self.tableid_raw         = dp_row['TABLEID_RAW'] # Table ref from input/excel before shortening
         self.table_name          = dp_row['TITLE']
-        self.table_sep           = dp_row['SEP'] # Separator used in .csv-file (used for reading input file)
-        self.subject_code        = dp_row['ICON'] if pxpyfactory.utils.valid_value(dp_row['ICON']) else dp_row['LEVEL_1']  
-        self.subject_area        = dp_row['LEVEL_1'] # todo: update to show the name of the subject area
+        self.subject_code        = dp_row['SUBJECT-CODE'] if pxpyfactory.utils.valid_value(dp_row['SUBJECT-CODE']) else dp_row['SUBJECT-AREA']  
+        self.subject_area        = dp_row['SUBJECT-AREA'] # todo: update to show the name of the subject area
 
         self.stub_list           = pxpyfactory.utils.prep_list_from_string(dp_row['STUB'])
         self.heading_list        = pxpyfactory.utils.prep_list_from_string(dp_row['HEADING'])
@@ -32,11 +31,11 @@ class PXDataProduct:
         self.contents_var        = dp_row['CONTENTS']
         self.contvariable        = 'STAT_VAR' # data_list[0] # Column name for contents variable - can probably be anything..
 
-        self.table_path          = pxpyfactory.io_utils.get_path([self.main_app.input_path, self.table_ref_raw + '.csv'])
-        self.table_meta_path     = pxpyfactory.io_utils.get_path([self.main_app.input_path, self.table_ref_raw + '_meta.csv'])
-        self.px_output_path      = pxpyfactory.io_utils.get_path([self.main_app.output_path, dp_row['LEVEL_1'], dp_row['LEVEL_2'], self.table_ref + '.px'])
-        self.sqa_output_path     = pxpyfactory.io_utils.get_path([self.main_app.output_path, 'sq', self.table_ref[0], self.table_ref + '.sqa'])
-        self.sqs_output_path     = pxpyfactory.io_utils.get_path([self.main_app.output_path, 'sq', self.table_ref[0], self.table_ref + '.sqs'])
+        self.table_path          = pxpyfactory.io_utils.get_path([self.main_app.input_path, self.tableid_raw + '.csv'])
+        self.table_meta_path     = pxpyfactory.io_utils.get_path([self.main_app.input_path, self.tableid_raw + '_meta.csv'])
+        self.px_output_path      = pxpyfactory.io_utils.get_path([self.main_app.output_path, dp_row['SUBJECT-AREA'], dp_row['SUBJECT'], self.tableid + '.px'])
+        self.sqa_output_path     = pxpyfactory.io_utils.get_path([self.main_app.output_path, 'sq', self.tableid[0], self.tableid + '.sqa'])
+        self.sqs_output_path     = pxpyfactory.io_utils.get_path([self.main_app.output_path, 'sq', self.tableid[0], self.tableid + '.sqs'])
 
         # Common variables to be set later:
         # self.table_data          = pd.DataFrame() # DataFrame with the actual data from input file
@@ -49,14 +48,14 @@ class PXDataProduct:
 
     # _____________________________________________________________________________
     def make_px(self):
-        pxpyfactory.utils.print_filter(f"{self.table_ref} {self.table_name}", 1)
+        pxpyfactory.utils.print_filter(f"{self.tableid} {self.table_name}", 1)
 
         if not pxpyfactory.io_utils.file_exists(self.table_path):
             pxpyfactory.utils.print_filter(f"WARNING: No data found. Skipping this data product / table.", 1)
             return False
         
-        self.table_data = pxpyfactory.io_utils.file_read(self.table_path, sep=self.table_sep) # Fetch data table from .parquet or .csv file
-        table_meta = pxpyfactory.io_utils.file_read(self.table_meta_path, sep=self.table_sep) # Read spesific metadata from .csv-file if it exists
+        self.table_data = pxpyfactory.io_utils.file_read(self.table_path) # Fetch data table from .parquet or .csv file
+        table_meta = pxpyfactory.io_utils.file_read(self.table_meta_path) # Read spesific metadata from .csv-file if it exists
         self._extract_table_metadata(table_meta) # Extract metadata from table_meta (fills table_meta_px, table_meta_sq and rename_map)
 
         # Set stub, heading and data columns if not set, based on data table content
@@ -85,7 +84,7 @@ class PXDataProduct:
         # Generate .sqa content
         sqa_content = pxpyfactory.saved_query.generate_sqa_content(
             self,
-            table_id=self.table_ref,
+            table_id=self.tableid,
             stub_list=self.stub_list,
             heading_list=self.heading_list,
             data_list=self.data_list,
@@ -207,8 +206,8 @@ class PXDataProduct:
     def _get_manual_metadata_updates(self, values_dict):
         # Prepare dictionary with px-parameters from input files:
         manual_metadata_updates_dict = {
-            'TABLEID':      self.table_ref     ,
-            'MATRIX':       self.table_ref     ,
+            'TABLEID':      self.tableid     ,
+            'MATRIX':       self.tableid     ,
             'TITLE':        self.table_name    ,
             'STUB':         self.stub_list     ,
             'HEADING':      [self.contvariable] + self.heading_list, # Add contvariable to the list of headings,

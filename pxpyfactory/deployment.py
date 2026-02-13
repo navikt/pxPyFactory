@@ -10,7 +10,7 @@ load_dotenv()
 
 def trigger_github_deployment(environment=None, branch=None):
     """
-    Trigger deployment workflow on pxweb2-api-nais repository
+    Trigger deployment workflow on pxweb-api repository
     
     Args:
         environment: Environment to deploy to (default from config)

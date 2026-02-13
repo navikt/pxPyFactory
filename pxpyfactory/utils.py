@@ -42,22 +42,21 @@ def prepare_data_products(common_meta_filepath):
     data_products = pxpyfactory.io_utils.file_read(common_meta_filepath, sheet_name='dataprodukter') # Get the overview of all data products
     data_products = data_products.map(lambda x: str(x) if pd.notnull(x) else None) # Force content in excel sheet to just strings for easier use (None for empty cells)
     # Column referances in the data_products sheet
-    data_products.rename(columns={'BYGG_NAA'      : 'BUILD_NOW'      }, inplace=True)
-    data_products.rename(columns={'IKON'          : 'ICON'           }, inplace=True) # område oversettes noen ganger i Nav til field
-    data_products.rename(columns={'OMRAADE'       : 'LEVEL_1'        }, inplace=True) # område oversettes noen ganger i Nav til field
-    data_products.rename(columns={'TEMA'          : 'LEVEL_2'        }, inplace=True) # tema oversettes ofte i Nav til theme
-    data_products.rename(columns={'NUMMER'        : 'TABLE_REF'      }, inplace=True)
-    data_products.rename(columns={'TITTEL'        : 'TITLE'          }, inplace=True)
-    data_products.rename(columns={'BESKRIVELSE'   : 'CONTENTS'       }, inplace=True)
+    # data_products.rename(columns={'BUILD'         : 'BUILD'          }, inplace=True)
+    # data_products.rename(columns={'TABLEID'       : 'TABLEID'        }, inplace=True)
+    # data_products.rename(columns={'SUBJECT-CODE'  : 'SUBJECT-CODE'   }, inplace=True) # område oversettes noen ganger i Nav til field
+    # data_products.rename(columns={'SUBJECT-AREA'  : 'SUBJECT-AREA'   }, inplace=True)
+    # data_products.rename(columns={'SUBJECT'       : 'SUBJECT'        }, inplace=True) # tema oversettes ofte i Nav til theme
+    # data_products.rename(columns={'TITLE'         : 'TITLE'          }, inplace=True)
+    # data_products.rename(columns={'CONTENTS'      : 'CONTENTS'       }, inplace=True)
     # data_products.rename(columns={'STUB'          : 'STUB'           }, inplace=True)
     # data_products.rename(columns={'HEADING'       : 'HEADING'        }, inplace=True)
     # data_products.rename(columns={'DATA'          : 'DATA'           }, inplace=True)
     # data_products.rename(columns={'UNITS'         : 'UNITS'          }, inplace=True)
-    # data_products.rename(columns={'SEP'           : 'SEP'            }, inplace=True)
-    data_products.rename(columns={'TIDSVARIABEL'  : 'TIMEVAL'        }, inplace=True)
+    # data_products.rename(columns={'TIMEVAL'       : 'TIMEVAL'        }, inplace=True)
 
-    data_products['TABLE_REF_RAW'] = data_products['TABLE_REF']
-    data_products['TABLE_REF'] = data_products['TABLE_REF'].apply(_shorten_table_ref)
+    data_products['TABLEID_RAW'] = data_products['TABLEID']
+    data_products['TABLEID'] = data_products['TABLEID'].apply(_shorten_tableid)
 
     # Filter based on command line arguments
     force_build_arg = get_input_args('build')
@@ -67,18 +66,18 @@ def prepare_data_products(common_meta_filepath):
         data_products['FORCE_BUILD'] = True
     else: # Build only table specified
         data_products['FORCE_BUILD'] = False
-        data_products.loc[data_products['TABLE_REF'] == force_build_arg, 'FORCE_BUILD'] = True
-        data_products.loc[data_products['TABLE_REF_RAW'] == force_build_arg, 'FORCE_BUILD'] = True
+        data_products.loc[data_products['TABLEID'] == force_build_arg, 'FORCE_BUILD'] = True
+        data_products.loc[data_products['TABLEID_RAW'] == force_build_arg, 'FORCE_BUILD'] = True
 
-    # Remove data products where BUILD_NOW is not set to 'x' in Excel sheet and FORCE_BUILD is not True or None
-    data_products = data_products[(data_products['BUILD_NOW'] == 'x') & (data_products['FORCE_BUILD'] != False)]
+    # Remove data products where BUILD is not set to 'x' in Excel sheet and FORCE_BUILD is not True or None
+    data_products = data_products[(data_products['BUILD'] == 'x') & (data_products['FORCE_BUILD'] != False)]
 
-    duplicates_mask = data_products.duplicated(subset=['TABLE_REF'], keep='first') # List of dublicate table numbers
+    duplicates_mask = data_products.duplicated(subset=['TABLEID'], keep='first') # List of dublicate table numbers
     duplicates_df = data_products[duplicates_mask].copy() # Dataframe with duplicate table numbers
     data_products = data_products[~duplicates_mask].copy() # Dataframe with unique table numbers (duplicates removed)
 
     print_filter('Data products / tables to create px-files from:', 0)
-    print_filter(data_products[['ICON', 'LEVEL_2', 'TABLE_REF', 'TITLE', 'STUB', 'HEADING', 'DATA', 'UNITS', 'TIMEVAL']], 0)
+    print_filter(data_products[['SUBJECT-CODE', 'SUBJECT', 'TABLEID', 'TITLE', 'STUB', 'HEADING', 'DATA', 'UNITS', 'TIMEVAL']], 0)
     if duplicates_df.shape[0] > 0:
         print_filter('--- Duplicated table numbers (will be skipped):', 0)
         print_filter(duplicates_df, 0)
@@ -86,9 +85,9 @@ def prepare_data_products(common_meta_filepath):
     return data_products
 # _____________________________________________________________________________
 # Shorten table reference to max 20 chars (excluding separators) by truncating each part
-def _shorten_table_ref(table_ref):
-    table_ref_str = str(table_ref)
-    text_parts = re.split(r'[_-]', table_ref_str) # Split by '_' and '-' to get text parts only
+def _shorten_tableid(tableid):
+    tableid_str = str(tableid)
+    text_parts = re.split(r'[_-]', tableid_str) # Split by '_' and '-' to get text parts only
     
     # Check if total length (without separators) exceeds 20
     total_length = sum(len(p) for p in text_parts)
@@ -133,8 +132,8 @@ def update_folder_structure(data_products_df, alias_df, output_path):
     path_list = []
     languages = ['no', 'en']
     for _, row in data_products_df.iterrows():
-        level1_path = output_path + '/' + str(row['LEVEL_1']).replace('/', '')
-        level2_path = level1_path + '/' + str(row['LEVEL_2']).replace('/', '')
+        level1_path = output_path + '/' + str(row['SUBJECT-AREA']).replace('/', '')
+        level2_path = level1_path + '/' + str(row['SUBJECT']).replace('/', '')
 
         if level1_path not in path_list:
             path_list.append(level1_path)
