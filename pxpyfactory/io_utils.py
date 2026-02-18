@@ -33,21 +33,14 @@ def _get_blob_or_blobs(in_path):
     # Output bucket: PX files and saved queries
     if in_path.startswith(('px/', 'sq/', pxpyfactory.config.paths.OUTPUT + '/', pxpyfactory.config.paths.SAVED_QUERY_OUTPUT + '/')):
         bucket = bucket_output
-        bucket_name = pxpyfactory.config.gcs.BUCKET_OUTPUT
     # Input bucket: everything else (CSV, Excel, logs, work files)
     else:
          bucket = bucket_input
-         bucket_name = pxpyfactory.config.gcs.BUCKET_INPUT
          
     if _is_path_to_file(in_path):
         return bucket.blob(in_path)
     else:
-        return storage_client.list_blobs(bucket_name, prefix=in_path)
-# _____________________________________________________________________________
-
-# _____________________________________________________________________________
-def get_path(path_parts):
-    return "/".join(path_parts)
+        return bucket.list_blobs(prefix=in_path)
 # _____________________________________________________________________________
 def file_exists(file_path):
     try:

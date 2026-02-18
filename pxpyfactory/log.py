@@ -113,6 +113,10 @@ class PXLog:
         if entry1 is None or entry2 is None:
             return True  # No previous entry
         for key in keys_to_check:
+            # Handle missing keys in old log entries
+            if key not in entry1 or key not in entry2:
+                pxpyfactory.utils.print_filter(f"Key '{key}' missing in log entry, assuming change", 2)
+                return True
             if not pxpyfactory.utils.same_value(entry1[key], entry2[key]):
                 pxpyfactory.utils.print_filter(f"Input change detected: {key}: '{entry1[key]}' -> '{entry2[key]}'", 2)
                 return True

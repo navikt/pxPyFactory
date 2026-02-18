@@ -31,11 +31,11 @@ class PXDataProduct:
         self.contents_var        = dp_row['CONTENTS']
         self.contvariable        = 'STAT_VAR' # data_list[0] # Column name for contents variable - can probably be anything..
 
-        self.table_path          = pxpyfactory.io_utils.get_path([self.main_app.input_path, self.tableid_raw + '.csv'])
-        self.table_meta_path     = pxpyfactory.io_utils.get_path([self.main_app.input_path, self.tableid_raw + '_meta.csv'])
-        self.px_output_path      = pxpyfactory.io_utils.get_path([self.main_app.output_path, dp_row['SUBJECT-AREA'], dp_row['SUBJECT'], self.tableid + '.px'])
-        self.sqa_output_path     = pxpyfactory.io_utils.get_path([self.main_app.output_path, 'sq', self.tableid[0], self.tableid + '.sqa'])
-        self.sqs_output_path     = pxpyfactory.io_utils.get_path([self.main_app.output_path, 'sq', self.tableid[0], self.tableid + '.sqs'])
+        self.table_path          = "/".join([self.main_app.input_path, self.tableid_raw + '.csv'])
+        self.table_meta_path     = "/".join([self.main_app.input_path, self.tableid_raw + '_meta.csv'])
+        self.px_output_path      = "/".join([self.main_app.output_path, dp_row['SUBJECT-AREA'], dp_row['SUBJECT'], self.tableid + '.px'])
+        self.sqa_output_path     = "/".join([self.main_app.sq_output_path, self.tableid[0], self.tableid + '.sqa'])
+        self.sqs_output_path     = "/".join([self.main_app.sq_output_path, self.tableid[0], self.tableid + '.sqs'])
 
         # Common variables to be set later:
         # self.table_data          = pd.DataFrame() # DataFrame with the actual data from input file

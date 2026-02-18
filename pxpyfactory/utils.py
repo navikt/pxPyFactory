@@ -208,7 +208,12 @@ def serialize_to_px_format(metadata, data_lines):
                 value_out += '\n' + line
         # If none of the above, assume text
         elif isinstance(row_value, str):
-            value_out = '"' + row_value + '"'
+            if ';' in row_value:
+                # Split values with ; into separate quoted values
+                values = [v.strip() for v in row_value.split(';')]
+                value_out = '"' + '", "'.join(values) + '"'
+            else:
+                value_out = '"' + row_value + '"'
         elif isinstance(row_value, list):
             # Special handling for TIMEVAL with TLIST - first element should not be quoted
             if 'TIMEVAL' in row_keyword and len(row_value) > 0 and row_value[0].startswith('TLIST('):

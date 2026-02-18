@@ -41,7 +41,7 @@ class GitHubConfig:
 @dataclass
 class Paths:
     """File and directory paths"""
-    INPUT = "input"
+    INPUT = "stats"
     OUTPUT = "px"
     SAVED_QUERY_OUTPUT = "sq"
     COMMON_METADATA_FILE = "common_meta.xlsx"

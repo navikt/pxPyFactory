@@ -9,10 +9,11 @@ class PXMain:
     def __init__(self):
         # Set folders and file-paths
         # script_path = set_script_path()
-        self.input_path              = 'input' # Define input path relative to script location
+        self.input_path              = 'stats' # Define input path for statistical tables
         self.output_path             = 'px'  # Define output path relative to script location
-        self.common_meta_filepath    = pxpyfactory.io_utils.get_path([self.input_path, 'common_meta.xlsx']) # Define path to common metadata file
-        self.production_log_filepath = pxpyfactory.io_utils.get_path([self.input_path, 'production_log.jsonl']) # Define path to common metadata file
+        self.sq_output_path          = 'sq'  # Define saved query output path
+        self.common_meta_filepath    = 'common_meta.xlsx' # Common metadata file at bucket root
+        self.production_log_filepath = 'log/production_log.jsonl'
 
     def run(self):
         pxpyfactory.utils.print_filter(f"--- Main input found: {pxpyfactory.io_utils.file_exists(self.common_meta_filepath)} ---", 1)
@@ -22,7 +23,8 @@ class PXMain:
         # Check if there has been any changes to input files since last production
         if pxpyfactory.utils.get_input_args('clean'):
             pxpyfactory.utils.print_filter(f"--- Clean (delete all content in output folder before creating new structure) ---", 0)
-            pxpyfactory.io_utils.delete_content_in_path(self.output_path) # Clean output folder before creating new structure
+            pxpyfactory.io_utils.delete_content_in_path(self.output_path)    # Clean output folder before creating new structure
+            pxpyfactory.io_utils.delete_content_in_path(self.sq_output_path) # Clean saved query output folder before creating new structure
     
         # Check if there has been any changes to input files since last production
         if not self.production_log.input_change() and pxpyfactory.utils.get_input_args('build') is None:
