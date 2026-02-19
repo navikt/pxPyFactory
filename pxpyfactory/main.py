@@ -33,6 +33,7 @@ class PXMain:
 
         data_products_df = pxpyfactory.utils.prepare_data_products(self.common_meta_filepath) # Get and prepare data products for px file generation from Excel-sheet.
         self.metadata_base = pxpyfactory.utils.prepare_metadata_base(self.common_meta_filepath) # Get and prepare metadata_base
+        self.translation = pxpyfactory.utils.prepare_translation(self.common_meta_filepath) # Get translation table for multi-language support
 
         # Check if there has been any changes to common meta since last production
         if self.production_log.common_meta_change() or pxpyfactory.utils.get_input_args('build') == 'all':

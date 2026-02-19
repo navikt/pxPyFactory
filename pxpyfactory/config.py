@@ -151,7 +151,6 @@ class Defaults:
     CSV_SEPARATOR = ";"
     EXCEL_SHEET_NAME = "Ark1"
     HEADER_ROW = 0
-    FILL_ITEM = "."
     CONTVARIABLE_NAME = "STAT_VAR"
     TABLEID_MAX_LENGTH = 20
     MAX_SQ_CELLS = 500000  # Maximum cells viewable in pxWeb2

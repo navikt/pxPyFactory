@@ -36,12 +36,12 @@ def generate_sqa_content(self, table_id, stub_list, heading_list, data_list, val
             value_count = len(values_dict[var])
         constraint_from_top = True
         try:
-            value_contsraint = int(self.table_meta_sq[self.table_meta_sq['KEYWORD'] == var]['VALUE'].iloc[0])
+            value_contsraint = int(pxpyfactory.utils.get_metadata_value(self.table_meta_sq, var))
             if value_contsraint < 0:
                 constraint_from_top = False
                 value_contsraint = abs(value_contsraint)
             value_contsraint = min(value_contsraint, value_count) # Reduce to available values
-        except IndexError:
+        except (IndexError, TypeError):
             value_contsraint = value_count
         # If number of cells in sq exceeds maximum viewable cells to show in pxWeb2, reduce it with a hard contraint limit:
         if total_cells * value_contsraint > 500000 or value_contsraint == 0:

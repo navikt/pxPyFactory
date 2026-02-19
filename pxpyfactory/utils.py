@@ -101,11 +101,65 @@ def _shorten_tableid(tableid):
     return ''.join(truncated_parts)
 
 # _____________________________________________________________________________
+def translate_value(value, language, translation_df, fallback_value=None):
+    """
+    Translate a single value to the specified language using the translation dataframe.
+    If translation not found, returns fallback_value (Norwegian) or the original value.
+    Args:
+        value: The value to translate (code from table_data)
+        language: Target language code (e.g., 'no', 'en')
+        translation_df: DataFrame with 'CODE' column and language columns ('NO', 'EN', etc.)
+        fallback_value: Value to use if translation not found for target language
+    Returns:
+        Translated value or fallback
+    """
+    if translation_df is None or translation_df.empty:
+        return fallback_value if fallback_value is not None else value
+    
+    # Check if required column exists (file_read with clean=True gives uppercase columns)
+    if 'CODE' not in translation_df.columns:
+        return fallback_value if fallback_value is not None else value
+    
+    # Convert value to string for comparison
+    value_str = str(value).strip()
+    
+    # Look up translation
+    lang_col = language.upper()  # Use uppercase for column lookup
+    match = translation_df[translation_df['CODE'].astype(str).str.strip() == value_str]
+    
+    if not match.empty and lang_col in match.columns:
+        translated = match[lang_col].iloc[0]
+        if pd.notna(translated) and str(translated).strip():
+            return str(translated).strip()
+    
+    # Fallback: try Norwegian if not the target language
+    if lang_col != 'NO' and not match.empty and 'NO' in match.columns:
+        norwegian = match['NO'].iloc[0]
+        if pd.notna(norwegian) and str(norwegian).strip():
+            return str(norwegian).strip()
+    
+    # Final fallback: return fallback_value or original
+    return fallback_value if fallback_value is not None else value
+
+# _____________________________________________________________________________
+def prepare_translation(common_meta_filepath):
+    # Load translation table for multi-language support
+    # Using clean=True ensures column names are uppercase (CODE, NO, EN, etc.)
+    try:
+        translation = pxpyfactory.io_utils.file_read(common_meta_filepath, sheet_name='translation', clean=True)
+        if translation is not None and not translation.empty:
+            print_filter(f"Translation table loaded with {len(translation)} entries", 2)
+        return translation
+    except Exception as e:
+        print_filter(f"Warning: Could not load translation sheet - {e}. Multi-language support will use original values.", 1)
+        return pd.DataFrame()  # Return empty DataFrame if sheet doesn't exist
+
+# _____________________________________________________________________________
 def prepare_metadata_base(common_meta_filepath):
     # Prepare general metadata from Excel-sheets - common for all data products
     # Spesific values for each data product will be handled for each data product in separate .csv-files
     meta_default = pxpyfactory.io_utils.file_read(common_meta_filepath, sheet_name='metadata-default')
-    meta_default = meta_default[['ORDER','KEYWORD','MANDATORY','DEFAULT_VALUE','TYPE']] # Keep only relevant columns
+    meta_default = meta_default[['ORDER','KEYWORD','MANDATORY','LANGUAGE_DEPENDENT','DEFAULT_VALUE','TYPE']] # Keep only relevant columns
     meta_manual = pxpyfactory.io_utils.file_read(common_meta_filepath, sheet_name='metadata-manual') # Manual updates on values for some keywords (can be empty) 
     metadata_base = metadata_add(meta_default, meta_manual, 'MANUAL_VALUE') # Adds the column 'manual_value' to 'meta_default'. The value is from 'meta_manual' (match on keyword)
     return metadata_base
@@ -192,47 +246,169 @@ def update_metadata(metadata, column, updates_dict, mandatory=True, order=500):
     # print(metadata[metadata['KEYWORD'] == keyword])
     return metadata
 # _____________________________________________________________________________
+def get_metadata_value(metadata, keyword, compare_value=None, case_sensitive=False):
+    value = metadata.loc[metadata['KEYWORD'] == keyword, 'VALUE']
+    if value.empty:
+        return None
+
+    first_value = str(value.iloc[0]).strip()
+    if compare_value is None:
+        return first_value
+    if not case_sensitive:
+        first_value = first_value.lower()
+        compare_value = str(compare_value).lower()
+    return first_value == compare_value
+# _____________________________________________________________________________
 # Prepare the lines that will be written to the .px file
-def serialize_to_px_format(metadata, data_lines):
+def serialize_to_px_format(metadata, data_lines, translation_df=None):
+    """
+    Serialize metadata and data to PX file format.
+    Supports multi-language keywords based on LANGUAGE_DEPENDENT column.
+    
+    Args:
+        metadata: DataFrame with columns ORDER, KEYWORD, VALUE, TYPE, MANDATORY, LANGUAGE_DEPENDENT
+        data_lines: List of data rows to insert at DATA keyword
+        translation_df: DataFrame with translation mappings (code, no, en, ...)
+    """
     list_of_lines_to_px = []
-    fill_item = "."
+    
+    # Extract LANGUAGE and LANGUAGES keyword in metadata
+    meta_lang = get_metadata_value(metadata, 'LANGUAGE')
+    meta_languages = get_metadata_value(metadata, 'LANGUAGES')
+    
+    if meta_languages is None:
+        # Fallback to LANGUAGE keyword value
+        languages = [meta_lang] if meta_lang else ['no']
+    elif isinstance(meta_languages, list):
+        languages = meta_languages
+    elif isinstance(meta_languages, str):
+        # Split by semicolon (works for both delimited and single values)
+        languages = [lang.strip() for lang in meta_languages.split(';')]
+    else:
+        # Fallback to LANGUAGE keyword value for unexpected types
+        languages = [meta_lang] if meta_lang else ['no']
+    
     for _, meta_row in metadata.iterrows():
         row_keyword = meta_row['KEYWORD']
         row_value = meta_row['VALUE']
         row_type = meta_row['TYPE']
+        # VALUES() keywords are always language dependent, even if not explicitly marked
+        language_dependent = (str(meta_row.get('LANGUAGE_DEPENDENT', '')).lower() == 'yes' or 
+                             row_keyword.startswith('VALUES('))
+        
+        # Special handling for integer types
         if row_type == 'integer':
             value_out = row_value
-        elif row_type == 'data': # This is only for the DATA part
+            list_of_lines_to_px.append(f'{row_keyword}={value_out};')
+            
+        # Special handling for DATA keyword
+        elif row_type == 'data':
             value_out = ''
             for line in data_lines:
                 value_out += '\n' + line
-        # If none of the above, assume text
-        elif isinstance(row_value, str):
-            if ';' in row_value:
-                # Split values with ; into separate quoted values
-                values = [v.strip() for v in row_value.split(';')]
-                value_out = '"' + '", "'.join(values) + '"'
+            list_of_lines_to_px.append(f'{row_keyword}={value_out};')
+            
+        # Multi-language keywords
+        elif language_dependent:
+            # Parse keyword to extract base keyword and optional parentheses content
+            # Example: "VALUES(VARE)" -> base="VALUES", paren_content="VARE"
+            paren_match = re.match(r'([A-Z-]+)(\(.*\))?', row_keyword)
+            if paren_match:
+                base_keyword = paren_match.group(1)
+                paren_content = paren_match.group(2) or ''
             else:
-                value_out = '"' + row_value + '"'
-        elif isinstance(row_value, list):
-            # Special handling for TIMEVAL with TLIST - first element should not be quoted
-            if 'TIMEVAL' in row_keyword and len(row_value) > 0 and row_value[0].startswith('TLIST('):
-                tlist_part = row_value[0]  # Keep TLIST unquoted
-                remaining_values = row_value[1:]  # Rest should be quoted
-                value_out = tlist_part + ', "' + '", "'.join(remaining_values) + '"'
-            elif all(isinstance(x, str) for x in row_value):
-                value_out = '"' + '", "'.join(row_value) + '"'
-            elif any(isinstance(x, str) for x in row_value):
-                value_out = '"' + '", "'.join([str(x) for x in row_value]) + '"'
-            else: # all(isinstance(x, (int, float)) for x in row_value):
-                value_out = ', '.join(str(x) for x in row_value)
-        elif row_type == 'text':
-            value_out = '"' + str(row_value) + '"'
+                base_keyword = row_keyword
+                paren_content = ''
+            
+            # Generate one line per language
+            for lang in languages:
+                # Translate the value(s) for this language
+                translated_value = _translate_metadata_value(row_value, lang, translation_df)
+                value_out = _format_px_value(translated_value, row_keyword, row_type)
+                
+                # Format: KEYWORD[lang]="value"; or KEYWORD[lang](...)="value";
+                list_of_lines_to_px.append(f'{base_keyword}[{lang}]{paren_content}={value_out};')
+        
+        # Single-language keywords (existing logic)
         else:
-            print_filter(f"Unclear type for: keyword={row_keyword}, value={row_value}, type desc={row_type}, type of current value={type(row_value)})", 0)
-            value_out = '"' + str(row_value) + '"'
-        list_of_lines_to_px.append(f'{row_keyword}={value_out};')
+            value_out = _format_px_value(row_value, row_keyword, row_type)
+            list_of_lines_to_px.append(f'{row_keyword}={value_out};')
+    
     return list_of_lines_to_px
+
+# _____________________________________________________________________________
+def _translate_metadata_value(value, language, translation_df):
+    """
+    Translate a metadata value (string, list, or delimited string) to target language.
+    Args:
+        value: Value to translate (can be str, list, or delimited string)
+        language: Target language code
+        translation_df: Translation lookup table
+    Returns:
+        Translated value in same format as input
+    """
+    if translation_df is None or translation_df.empty:
+        return value
+    
+    # Handle list values
+    if isinstance(value, list):
+        return [translate_value(v, language, translation_df) for v in value]
+    
+    # Handle delimited string values (split by ;)
+    if isinstance(value, str) and ';' in value:
+        values = [v.strip() for v in value.split(';')]
+        translated = [translate_value(v, language, translation_df) for v in values]
+        return ';'.join(translated)
+    
+    # Handle single string value
+    if isinstance(value, str):
+        return translate_value(value, language, translation_df)
+    
+    # Return as-is for other types
+    return value
+
+# _____________________________________________________________________________
+def _format_px_value(value, keyword, row_type):
+    """
+    Format a value for PX file output (handles quoting, lists, etc.)
+    Args:
+        value: The value to format
+        keyword: The metadata keyword (for special cases like TIMEVAL)
+        row_type: The type indicator from metadata
+    Returns:
+        Formatted string ready for PX file
+    """
+    # Text with semicolon delimiter
+    if isinstance(value, str) and ';' in value:
+        values = [v.strip() for v in value.split(';')]
+        return '"' + '", "'.join(values) + '"'
+    
+    # Single string value
+    elif isinstance(value, str):
+        return '"' + value + '"'
+    
+    # List values
+    elif isinstance(value, list):
+        # Special handling for TIMEVAL with TLIST - first element should not be quoted
+        if 'TIMEVAL' in keyword and len(value) > 0 and str(value[0]).startswith('TLIST('):
+            tlist_part = value[0]  # Keep TLIST unquoted
+            remaining_values = value[1:]  # Rest should be quoted
+            return tlist_part + ', "' + '", "'.join(remaining_values) + '"'
+        elif all(isinstance(x, str) for x in value):
+            return '"' + '", "'.join(value) + '"'
+        elif any(isinstance(x, str) for x in value):
+            return '"' + '", "'.join([str(x) for x in value]) + '"'
+        else:  # all numeric
+            return ', '.join(str(x) for x in value)
+    
+    # Text type fallback
+    elif row_type == 'text':
+        return '"' + str(value) + '"'
+    
+    # Unknown - default to quoted string
+    else:
+        print_filter(f"Unclear type for: keyword={keyword}, value={value}, type desc={row_type}, type of current value={type(value)})", 0)
+        return '"' + str(value) + '"'
 
 # _____________________________________________________________________________
 def prep_list_from_string(in_string, separator=',', to_upper=True, split_part=0):

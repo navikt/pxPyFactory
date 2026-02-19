@@ -75,7 +75,7 @@ class PXDataProduct:
         pxpyfactory.utils.alert_missing_mandatory(metadata) # Alert if any mandatory keywords are missing values
 
         # Final product from each data product is the content to be written to the .px file:
-        self.list_of_lines = pxpyfactory.utils.serialize_to_px_format(metadata, data_lines)
+        self.list_of_lines = pxpyfactory.utils.serialize_to_px_format(metadata, data_lines, self.main_app.translation)
         return True
 
     # _____________________________________________________________________________
@@ -242,14 +242,11 @@ class PXDataProduct:
         ## Prepare px-parameters
         # Extract LAST-UPDATED value from metadata, handling missing/duplicate keywords
         # If it is not stated in metadata, get last updated time from data file
-        filtered_df = self.table_meta_px[self.table_meta_px['KEYWORD'] == 'LAST-UPDATED']
-        self.table_meta_px = self.table_meta_px[self.table_meta_px['KEYWORD'] != 'LAST-UPDATED']  # Remove used rows
-        if filtered_df.empty:
+        last_updated_value = pxpyfactory.utils.get_metadata_value(self.table_meta_px, 'LAST-UPDATED')
+        self.table_meta_px = self.table_meta_px[self.table_meta_px['KEYWORD'] != 'LAST-UPDATED']  # Remove extracted rows
+        if last_updated_value is None:
             # Get from file modification time - this will be timezone-converted
             last_updated_value = pxpyfactory.io_utils.get_last_updated(self.table_path)
-        else:
-            # Use metadata value as-is without timezone conversion (user has already formatted it correctly)
-            last_updated_value = str(filtered_df['VALUE'].iloc[0]).strip()
 
         # Add px-parameter for each data column:
         for index, data_col in enumerate(self.data_list):
@@ -293,11 +290,11 @@ class PXDataProduct:
 
         # Set the value to the first non-null value in this priority:
         metadata_prep['VALUE'] = metadata_prep[['SPESIFIC_VALUE', 'MANUAL_VALUE', 'DEFAULT_VALUE']].apply(pxpyfactory.utils.get_first_notnull, axis=1)
-        metadata_prep = metadata_prep[['ORDER', 'KEYWORD', 'VALUE', 'TYPE', 'MANDATORY']] # Keep only relevant columns
+        metadata_prep = metadata_prep[['ORDER', 'KEYWORD', 'VALUE', 'TYPE', 'MANDATORY', 'LANGUAGE_DEPENDENT']] # Keep only relevant columns
         # Filter out rows with no value, unless they are mandatory:
         metadata_prep = metadata_prep[(metadata_prep['MANDATORY']) | (metadata_prep.apply(lambda row: pxpyfactory.utils.valid_value(row['VALUE']), axis=1))].sort_values('ORDER')
 
-        fill_value = metadata_prep.loc[metadata_prep['KEYWORD'] == 'DATASYMBOL2', 'VALUE'].iloc[0] # getting the fill value must be done after preparing the metadata values
+        fill_value = pxpyfactory.utils.get_metadata_value(metadata_prep, 'DATASYMBOL2') # getting the fill value must be done after preparing the metadata values
 
         return metadata_prep, fill_value
 
@@ -325,8 +322,8 @@ class PXDataProduct:
                 for key in range(len(key_tuple)):
                     row = filtered_contact[filtered_contact['KEYWORD'] == key_tuple[key] + postfix_tuple[postfix]]
                     if not row.empty:
-                        row_default_value = str(row['DEFAULT_VALUE'].iloc[0]).strip() if pd.notna(row['DEFAULT_VALUE'].iloc[0]) else ''
-                        row_manual_value = str(row['MANUAL_VALUE'].iloc[0]).strip() if pd.notna(row['MANUAL_VALUE'].iloc[0]) else ''
+                        row_default_value  = str(row['DEFAULT_VALUE'].iloc[0]).strip()  if pd.notna(row['DEFAULT_VALUE'].iloc[0])  else ''
+                        row_manual_value   = str(row['MANUAL_VALUE'].iloc[0]).strip()   if pd.notna(row['MANUAL_VALUE'].iloc[0])   else ''
                         row_spesific_value = str(row['SPESIFIC_VALUE'].iloc[0]).strip() if pd.notna(row['SPESIFIC_VALUE'].iloc[0]) else ''
                         pxpyfactory.utils.print_filter(f'Processing: {key_tuple[key] + postfix_tuple[postfix]}'
                               f' | DEFAULT_VALUE: {row_default_value}'
