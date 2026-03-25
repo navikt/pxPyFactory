@@ -45,7 +45,8 @@ class Paths:
     OUTPUT = "px"
     SAVED_QUERY_OUTPUT = "sq"
     COMMON_METADATA_FILE = "common_meta.xlsx"
-    PRODUCTION_LOG_FILE = "production_log.jsonl"
+    LOG_FOLDER = "log"
+    PRODUCTION_LOG_FILE = "log/production_log.jsonl"
 
 
 @dataclass
@@ -136,7 +137,7 @@ class LogColumns:
 
 @dataclass
 class LogTypes:
-    """Log entry type identifiers"""
+    """Log entry type identifiers used in production log"""
     SUMMARY = "summary"
     TABLE = "table"
 
@@ -214,26 +215,6 @@ class PXKeywords:
     CONTACT = "CONTACT"
     PRECISION = "PRECISION"
 
-
-@dataclass
-class ContactConfig:
-    """CONTACT metadata configuration"""
-    EXPECTED_FIELD_COUNT = 8
-    FIELD_SEPARATOR = "#"
-    CONTACT_SEPARATOR = "||"
-    KEY_TUPLE = (
-        "CONTACT",
-        "CONTACT-HEADER",
-        "not in use 1",
-        "not in use 2",
-        "CONTACT-PHONE",
-        "CONTACT-EMAIL",
-        "CONTACT-BODY",
-        "not in use 3"
-    )
-    POSTFIX_TUPLE = ("", "1", "2", "3")
-
-
 # ============================================================================
 # SINGLETON INSTANCES
 # ============================================================================
@@ -265,4 +246,3 @@ validation = ValidationStrings()
 
 # PX Configuration
 px_keywords = PXKeywords()
-contact = ContactConfig()

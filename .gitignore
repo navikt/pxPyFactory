@@ -3,12 +3,12 @@ _ignored_by_git/
 # Output folder content
 pxpyfactory/__pycache__/
 
-input/*
-!input/.gitkeep
-!input/*.xlsx
+input_bucket/*
+!input_bucket/.gitkeep
+!input_bucket/*.xlsx
 
-output/*
-!output/.gitkeep
+output_bucket/*
+!output_bucket/.gitkeep
 
 ~$*
 

@@ -1,0 +1,13 @@
+{
+    "python-envs.pythonProjects": [
+        {
+            "path": ".",
+            "envManager": "ms-python.python:venv",
+            "packageManager": "ms-python.python:pip"
+        }
+    ],
+    "cloudcode.project": "statistikkbank-dev-e972",
+    "cloudcode.beta.dataprocRegion": "europe-north1",
+    "cloudcode.yaml.enableKubernetesSupport": false,
+    "cloudcode.yaml.clusterResourceCompletion": false
+}
