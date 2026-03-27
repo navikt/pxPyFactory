@@ -26,7 +26,7 @@ class PXDataProduct:
         self.stub_list           = pxpyfactory.helpers.prep_list_from_string(dp_row['STUB'])
         self.heading_list        = pxpyfactory.helpers.prep_list_from_string(dp_row['HEADING'])
         self.data_list           = pxpyfactory.helpers.prep_list_from_string(dp_row['DATA'])
-        self.data_list_pure      = pxpyfactory.helpers.prep_list_from_string(dp_row['DATA'], to_upper=False) # keep formatting of data columns since they are used as values
+        # self.data_list_pure      = pxpyfactory.helpers.prep_list_from_string(dp_row['DATA'], to_upper=False) # keep formatting of data columns since they are used as values
         self.data_precision_list = pxpyfactory.helpers.prep_list_from_string(dp_row['DATA'], split_part=1) # get precision part only
         self.units_list          = pxpyfactory.helpers.prep_list_from_string(dp_row['UNITS'])
         self.timeval_list        = pxpyfactory.helpers.prep_list_from_string(dp_row['TIMEVAL'])
@@ -40,19 +40,19 @@ class PXDataProduct:
         self.sqa_output_path     = "/".join([self.main_app.sq_output_path, self.tableid[0], self.tableid + '.sqa'])
         self.sqs_output_path     = "/".join([self.main_app.sq_output_path, self.tableid[0], self.tableid + '.sqs'])
 
-        self.keywords            = {}
+        # self.keywords            = {}
 
         # Common variables to be set later:
-        self.table_data          = pd.DataFrame() # DataFrame with the actual data from input file
-        self.table_meta_px       = pd.DataFrame() # DataFrame with px parameters from spesific metadata file
-        self.table_meta_sq       = pd.DataFrame() # DataFrame with sq parameters from spesific metadata file
-        self.values_dict         = {} # Dictionary with unique values for each column in the data table
+        # self.table_data          = pd.DataFrame() # DataFrame with the actual data from input file
+        # self.table_meta_px       = pd.DataFrame() # DataFrame with px parameters from spesific metadata file
+        self.table_meta_sq       = pd.DataFrame() # DataFrame with sq parameters from spesific metadata file (this is used in the SavedQueryGenerator)
+        self.values_dict         = {} # Dictionary with unique values for each column in the data table (this is also used in the SavedQueryGenerator)
         self.rename_map          = {} # Dictionary mapping original column names to renamed ones
         # self.translation_map     = main_app.translation_base.copy() # DataFrame mapping original text to translations for different languages (built from metadata with language-specific renames)
 
-        # self.list_of_lines       = [] # Final list of lines to be written to .px file
+        self.list_of_lines       = [] # Final list of lines to be written to .px file
 
-        self.fill_value          = None # Value used to fill empty cells in data table; this is needed to be able to get unique values for each column without losing information about empty cells, and must be set before preparing the data lines from the data table
+        # self.fill_value          = None # Value used to fill empty cells in data table; this is needed to be able to get unique values for each column without losing information about empty cells, and must be set before preparing the data lines from the data table
 
     # _____________________________________________________________________________
     def create_px_content(self):
@@ -63,63 +63,29 @@ class PXDataProduct:
             return False
         
         table_data = pxpyfactory.file_io.file_read(self.table_path) # Fetch data table from .parquet or .csv file
-        # Set stub, heading and data columns if not set, based on data table content
-        # and create a dictionary with unique values for each column and ensure correct formatting of content
-        table_data = self._prepare_columns(table_data) # Also update self.stub_list, self.heading_list and self.data_list
+        table_data, self.stub_list, self.heading_list, self.data_list = self._prepare_columns(table_data, self.stub_list, self.heading_list, self.data_list) 
 
-        # Create a dictionary with unique values for each column
-        for column in table_data.columns:
-            if column not in self.data_list:
-                # Store unique values in column for use in VALUES-keywords:
-                self.values_dict[column] = sorted(pd.unique(table_data[column]))
-        self.table_data = table_data
-
-        table_meta = pxpyfactory.file_io.file_read(self.table_meta_path) # Read spesific metadata from .csv-file if it exists
-        self.table_meta_px, self.table_meta_sq, self.table_meta_rename = self._extract_table_metadata(table_meta) # Extract spesific metadata from table_meta
+        # Get unique values for each column in the data table to be able to create all combinations of stub and heading values later.
+        self.values_dict = self._create_values_dict(table_data, self.data_list) 
 
         # Update keyword instances with spesific metadata for this data product.
-        keywords = self._set_keywords_base_for_data_product() # This function uses a lot of self variables.
+        keywords = self._set_keywords_base_for_data_product() # OBS # This function uses a lot of self variables.
 
-        # Update or add keyword values from _meta file (spesific for this data product - table_meta_px).
-        # For each row in table_meta_px, the value and language are added to the corresponding keyword instance in keywords.
-        # If the keyword from table_meta_px is not found in keywords, a warning is printed and the keyword is ignored.
-        for _, row in self.table_meta_px.iterrows():
-            keyword = row['KEYWORD']
-            language = row['LANGUAGE']
-            value = row['VALUE']
-            if keyword == 'CONTACT':
-                value = pxpyfactory.keyword_contact.shape_to_px(value) # Ensure correct formatting of contact information.
-            if keyword in keywords:
-                if keywords[keyword].language_dependent and pxpyfactory.validation.valid_value(language):
-                    keywords[keyword].set_value(value, language=language) # Add value and language to the keyword instance
-                else:
-                    keywords[keyword].set_value(value) # Add value to the keyword instance without language
-            else:
-                pxpyfactory.helpers.print_filter(f"WARNING: Keyword '{keyword}' from spesific metadata not found in metadata base. This keyword will be ignored.", 1)
+        table_meta = pxpyfactory.file_io.file_read(self.table_meta_path) # Read spesific metadata from .csv-file if it exists
+        table_meta_px, self.table_meta_sq, self.table_meta_rename = self._extract_table_metadata(table_meta) # Extract spesific metadata from table_meta
 
-        self.keywords = keywords
-        self.fill_value = keywords['DATASYMBOL2'].get_value() # Must be set after keywords are updated.
+        # Update keyword values from spesific metadata for this data product (table_meta_px)
+        keywords = self._update_keywords_with_spesific_metadata(keywords, table_meta_px)
 
-        # CONTACT
-        # Her skal verdier fra de forskjellige kildene legges sammen, og ikke overskrive hverandre.
-        # I tillegg kommer den oppdelt, og må slås sammen på en bestemt måte.
-        # Dette ble tidligere håndtert her: self._prepare_contact_metadata(metadata_prep)
-        # Bør det lages en 'child' av 'keyword'-klassen for kontaktinformasjon som håndterer dette på en bedre måte?
-
-
-        # Final product from each data product is the content to be written to the .px file:
-        languages = keywords['LANGUAGES'].get_value() # Must be set after keywords are updated.
-        list_of_lines = []
-        for keyword_name in sorted(self.keywords, key=lambda k: self.keywords[k].order):
-            pxpyfactory.helpers.print_filter(f"Keyword: {keyword_name} - order: {self.keywords[keyword_name].order} - value: {self.keywords[keyword_name].value} - default_value: {self.keywords[keyword_name].default_value}", 4)
-            if self.keywords[keyword_name].order < 1000: # Only include keywords with order < 1000 in the .px file; the rest are used for internal handling and not part of the final .px content
-                keyword_lines = self.keywords[keyword_name].get_px_lines(languages=languages, warn_on_missing_mandatory=True)
-                list_of_lines.extend(keyword_lines)
-
+        # Get px-lines for all keywords. Requested languages are included.
+        meta_lines = self._get_all_px_lines_from_keywords(keywords, keywords['LANGUAGES'].get_value())
+ 
         # data_lines are the lines with the actual data content to be written to the .px file.
-        data_str = self._get_lines_of_data_from_table() # Use a lot of self variables.
-        list_of_lines.append('DATA=' + data_str + '\n;') # Add empty line at the end of the file
-        self.list_of_lines = list_of_lines
+        fill_value = keywords['DATASYMBOL2'].get_value()
+        data_lines = self._get_lines_of_data_from_table(table_data, self.values_dict, self.stub_list, self.heading_list, self.data_list, fill_value)
+
+        # Combine meta lines and data lines into final list of lines to be written to .px file
+        self.list_of_lines = meta_lines + ['DATA='] + data_lines + [';']
     
         return True
 
@@ -138,59 +104,59 @@ class PXDataProduct:
             return True
     # _____________________________________________________________________________
     # _____________________________________________________________________________
-    def _prepare_columns(self, table_data):
+    def _prepare_columns(self, table_data, stub_list, heading_list, data_list):
         # Update stub_list, heading_list and data_list based on content of table_data if any of the lists are empty
         remaining_columns = table_data.columns.tolist()
         pxpyfactory.helpers.print_filter(f"  All columns in table: {remaining_columns}", 2)
 
-        pxpyfactory.helpers.print_filter(f"  Initial data_list: {self.data_list}", 2)
-        if pxpyfactory.validation.is_list_empty(self.data_list):
+        pxpyfactory.helpers.print_filter(f"  Initial data_list: {data_list}", 2)
+        if pxpyfactory.validation.is_list_empty(data_list):
             uniqe_values_in_columns = {}
             for column in remaining_columns:
                 uniqe_values_in_columns[column] = len(pd.unique(table_data[column]))
             # find column with most unique values and set as data column
             data_column = max(uniqe_values_in_columns, key=uniqe_values_in_columns.get)
-            self.data_list = [data_column]
+            data_list = [data_column]
             remaining_columns.remove(data_column)
             for key, value in uniqe_values_in_columns.items():
                 if (key in remaining_columns) and (value > 1000):
-                    self.data_list.append(key)
+                    data_list.append(key)
                     remaining_columns.remove(key)
-            self.data_list_pure = self.data_list
+            # self.data_list_pure = data_list
         else:
-            for column in self.data_list:
+            for column in data_list:
                 if column in remaining_columns:
                     remaining_columns.remove(column)
-        pxpyfactory.helpers.print_filter(f"  Updated data_list: {self.data_list}", 2)
+        pxpyfactory.helpers.print_filter(f"  Updated data_list: {data_list}", 2)
 
-        pxpyfactory.helpers.print_filter(f"  Initial stub_list: {self.stub_list}", 2)
-        if pxpyfactory.validation.is_list_empty(self.stub_list):
+        pxpyfactory.helpers.print_filter(f"  Initial stub_list: {stub_list}", 2)
+        if pxpyfactory.validation.is_list_empty(stub_list):
             for column in remaining_columns:
-                if column not in self.heading_list:
-                    self.stub_list = [column]
+                if column not in heading_list:
+                    stub_list = [column]
                     remaining_columns.remove(column)
                     break # only pick the first column found as stub
         else:
-            for column in self.stub_list:
+            for column in stub_list:
                 if column in remaining_columns:
                     remaining_columns.remove(column)
-        pxpyfactory.helpers.print_filter(f"  Updated stub_list: {self.stub_list}", 2)
+        pxpyfactory.helpers.print_filter(f"  Updated stub_list: {stub_list}", 2)
 
-        pxpyfactory.helpers.print_filter(f"  Initial heading_list: {self.heading_list}", 2)
-        if pxpyfactory.validation.is_list_empty(self.heading_list):
-            self.heading_list = []
+        pxpyfactory.helpers.print_filter(f"  Initial heading_list: {heading_list}", 2)
+        if pxpyfactory.validation.is_list_empty(heading_list):
+            heading_list = []
         # Add all remaining columns must be headings:
         for column in remaining_columns:
-            if column not in self.heading_list:
-                self.heading_list.append(column)
-        pxpyfactory.helpers.print_filter(f"  Updated heading_list: {self.heading_list}", 2)
+            if column not in heading_list:
+                heading_list.append(column)
+        pxpyfactory.helpers.print_filter(f"  Updated heading_list: {heading_list}", 2)
 
         # self.rename_stuff(self.rename_map) # rename_map
         # table_data = self.rename_table_data(self.rename_map, table_data)
 
         # Ensure correct formatting of content
         for column in table_data.columns:
-            if column in self.data_list:
+            if column in data_list:
                 # Ensure all decimal commas are replaced with dots in data columns
                 table_data[column] = table_data[column].apply(lambda x: x.replace(',', '.') if isinstance(x, str) and ',' in x else x)
                 table_data[column] = table_data[column].apply(lambda x: x.replace(' ', '_') if isinstance(x, str) and ' ' in x else x)
@@ -198,7 +164,39 @@ class PXDataProduct:
                 # Ensure all values in non-data columns are strings (to avoid issues with mixed types):
                 table_data[column] = table_data[column].apply(lambda x: str(x) if pd.notnull(x) else '')
 
-        return table_data
+        return table_data, stub_list, heading_list, data_list
+
+    # _____________________________________________________________________________
+    def _create_values_dict(self, table_data, data_list):
+        # Create a dictionary with unique values for each column
+        values_dict = {}
+        for column in table_data.columns:
+            if column not in data_list:
+            # Store unique values in column for use in VALUES-keywords:
+                values_dict[column] = sorted(pd.unique(table_data[column]))
+        return values_dict
+    
+
+    # _____________________________________________________________________________
+    def _update_keywords_with_spesific_metadata(self, keywords, table_meta_px):
+        # Update or add keyword values from _meta file (spesific for this data product - table_meta_px).
+        # For each row in table_meta_px, the value and language are added to the corresponding keyword instance in keywords.
+        # If the keyword from table_meta_px is not found in keywords, a warning is printed and the keyword is ignored.
+        for _, row in table_meta_px.iterrows():
+            keyword = row['KEYWORD']
+            language = row['LANGUAGE']
+            value = row['VALUE']
+            if keyword == 'CONTACT':
+                value = pxpyfactory.keyword_contact.shape_to_px(value) # Ensure correct formatting of contact information.
+            if keyword in keywords:
+                if keywords[keyword].language_dependent and pxpyfactory.validation.valid_value(language):
+                    keywords[keyword].set_value(value, language=language) # Add value and language to the keyword instance
+                else:
+                    keywords[keyword].set_value(value) # Add value to the keyword instance without language
+            else:
+                pxpyfactory.helpers.print_filter(f"WARNING: Keyword '{keyword}' from spesific metadata not found in metadata base. This keyword will be ignored.", 1)
+
+        return keywords
 
     # _____________________________________________________________________________
     # Extract metadata from table_meta to spesific PX parameters, renaming of columns, and Saved Query parameters
@@ -282,6 +280,7 @@ class PXDataProduct:
         keywords['CONTACT'].set_value(shaped_contact_value, set_as_default_value=True)
         keywords['CONTACT'].strictly_enforce_scope = False
         keywords['CONTACT'].use_default_value_as_base = True # This must be set before setting separate values.
+        keywords['CONTACT'].set_value_use_append = True # This must be set before setting separate values.
 
         # Due to a faulty need for only plain UNITS in addition to the others, it is added here.
         keywords['UNITS'].set_value('-')
@@ -316,29 +315,39 @@ class PXDataProduct:
             # keywords['DAYADJ'].set_value(value, scope=data_col, language=language_initial)
             # keywords['SEASADJ'].set_value(value, scope=data_col, language=language_initial)
 
-    
-
         return keywords
 
+    # _____________________________________________________________________________
+    def _get_all_px_lines_from_keywords(self, keywords, languages):
+        # Get lines for all keywords to be written to the .px file. This includes handling of language-specific values and warnings for missing mandatory values.
+        list_of_lines = []
+        
+        sorted_keywords = sorted(keywords.items(), key=lambda item: item[1].order)
+
+        for keyword_name, keyword in sorted_keywords:
+            pxpyfactory.helpers.print_filter(f"Keyword: {keyword_name} - order: {keyword.order} - value: {keyword.value} - default_value: {keyword.default_value}", 4)
+            if keyword.order < 1000: # Only include keywords with order < 1000 in the .px file; the rest are used for internal handling and not part of the final .px content
+                keyword_lines = keyword.get_px_lines(languages=languages, warn_on_missing_mandatory=True)
+                list_of_lines.extend(keyword_lines)
+
+        return list_of_lines
 
     # _____________________________________________________________________________
     # Create the data content lines to the px-file.
     # To get the correct format all possible combinations of stub and heading values must be created, and merged with the data table.
-    # Missing values are filled with self.fill_value.
-    def _get_lines_of_data_from_table(self):
+    # Missing values are filled with the provided fill_value.
+    def _get_lines_of_data_from_table(self, table_data, values_dict, stub_list, heading_list, data_list, fill_value):
         # 1. Generate all possible combinations in the correct order
-        stub_and_headings = self.stub_list + self.heading_list
-        all_combinations_of_stub_heading = pd.DataFrame(list(product(*[self.values_dict[axis] for axis in stub_and_headings])), columns=stub_and_headings)
+        stub_and_headings = stub_list + heading_list
+        all_combinations_of_stub_heading = pd.DataFrame(list(product(*[values_dict[axis] for axis in stub_and_headings])), columns=stub_and_headings)
         pxpyfactory.helpers.print_filter(all_combinations_of_stub_heading, 3)
         # 2. Merge with actual data
-        expanded_table_data = pd.merge(all_combinations_of_stub_heading, self.table_data, on=stub_and_headings, how='left').fillna(self.fill_value)
+        expanded_table_data = pd.merge(all_combinations_of_stub_heading, table_data, on=stub_and_headings, how='left').fillna(fill_value)
         pxpyfactory.helpers.print_filter(expanded_table_data, 3)
 
-        data_pivot = expanded_table_data.pivot_table(index=self.stub_list, columns=self.heading_list, values=self.data_list, aggfunc='first')
+        data_pivot = expanded_table_data.pivot_table(index=stub_list, columns=heading_list, values=data_list, aggfunc='first')
         data_lines = [' '.join(map(str, row)) for row in data_pivot.values] # Convert each row to a space-separated string
-        # make one string with first a empty line, then each item in data_lines separated by a new line:
-        data_str = '\n'.join([''] + data_lines)
 
-        return data_str
+        return data_lines
     
 

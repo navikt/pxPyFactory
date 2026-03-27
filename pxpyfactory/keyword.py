@@ -21,6 +21,7 @@ class Keyword:
                     strictly_enforce_scope=True, 
                     scope_can_not_be_both_none_and_specific=True, # If True and specific scope is provided, None scope is just fallback and not included from get_px_lines().
                     allow_empty_return_value=False,
+                    set_value_use_append=False, # If True, when set_value is called multiple times for the same scope and language, the values will be appended to a list instead of overwriting each other.
                     use_default_value_as_base=False,
                     default_value=None,
                     value=None,
@@ -44,6 +45,7 @@ class Keyword:
         self.strictly_enforce_scope                         = self._interpret_boolean(strictly_enforce_scope)
         self.scope_can_not_be_both_none_and_specific        = self._interpret_boolean(scope_can_not_be_both_none_and_specific)
         self.allow_empty_return_value                       = self._interpret_boolean(allow_empty_return_value)
+        self.set_value_use_append                           = self._interpret_boolean(set_value_use_append)
         self.use_default_value_as_base                      = self._interpret_boolean(use_default_value_as_base)
         self.default_value                                  = self._split_if_str_with_char(default_value, ';')
         
@@ -129,7 +131,9 @@ class Keyword:
         return self._coerce_value(input_value)
     
     # _____________________________________________________________________________
-    def set_value(self, value, language=None, scope=None, append=False, set_as_default_value=False):
+    def set_value(self, value, language=None, scope=None, append=None, set_as_default_value=False):
+        if append is None:
+            append = self.set_value_use_append
         if not self.language_dependent:
             language = None  # Ignore language if not language-dependent
         if isinstance(value, dict):
@@ -270,9 +274,8 @@ class Keyword:
             for scope in scopes_to_use:
                 for language in target_languages:
                     value = self.get_value(language=language, scope=scope)
-                    # For example CONTACT keyword includes default_value with additional values.
-                    if self.use_default_value_as_base and (value != self.default_value) and (self.default_value is not None) and (value is not None):
-                        value = self.default_value + value
+                    if self.use_default_value_as_base or self.set_value_use_append:
+                        value = self._merge_value(value)
                     lines.append(self._to_px_line(language=language, scope=scope, value=value))
         else:
             if self.mandatory: # If the keyword is mandatory, but the value is empty
@@ -287,6 +290,24 @@ class Keyword:
             # If the keyword is not mandatory, we will return an empty list, which will result in the keyword not being included in the output px file.
         return lines
 
+    # _____________________________________________________________________________
+    # If the value is a list of values (due to append), we will merge it into a single string.
+    # If use_default_value_as_base is True, default value will be merged with value.
+    def _merge_value(self, value, separator=' '):
+        value_is_list = isinstance(value, (list, tuple))
+        if value_is_list:
+            # Remove None and empty values from the list, and convert all values to stripped strings.
+            value = [str(v).strip() for v in value if v is not None and str(v).strip() != '']
+        # For example CONTACT keyword includes default_value with additional values.
+        if self.use_default_value_as_base and (self.default_value is not None) and (value is not None):
+            if value_is_list and (self.default_value not in value):
+                return separator.join([self.default_value] + list(value))
+            if isinstance(value, str) and self.default_value != value:
+                return separator.join([self.default_value] + [value])
+        if value_is_list:
+            return separator.join(value)
+        return value
+    
     # _____________________________________________________________________________
     def _to_px_line(self, language, scope, value):
         line_str = self.name
