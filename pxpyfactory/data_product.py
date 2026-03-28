@@ -47,7 +47,7 @@ class PXDataProduct:
         # self.table_meta_px       = pd.DataFrame() # DataFrame with px parameters from spesific metadata file
         self.table_meta_sq       = pd.DataFrame() # DataFrame with sq parameters from spesific metadata file (this is used in the SavedQueryGenerator)
         self.values_dict         = {} # Dictionary with unique values for each column in the data table (this is also used in the SavedQueryGenerator)
-        self.rename_map          = {} # Dictionary mapping original column names to renamed ones
+        # self.rename_map          = {} # Dictionary mapping original column names to renamed ones
         # self.translation_map     = main_app.translation_base.copy() # DataFrame mapping original text to translations for different languages (built from metadata with language-specific renames)
 
         self.list_of_lines       = [] # Final list of lines to be written to .px file
@@ -72,10 +72,13 @@ class PXDataProduct:
         keywords = self._set_keywords_base_for_data_product() # OBS # This function uses a lot of self variables.
 
         table_meta = pxpyfactory.file_io.file_read(self.table_meta_path) # Read spesific metadata from .csv-file if it exists
-        table_meta_px, self.table_meta_sq, self.table_meta_rename = self._extract_table_metadata(table_meta) # Extract spesific metadata from table_meta
+        table_meta_px, self.table_meta_sq, table_meta_cr = self._extract_table_metadata(table_meta) # Extract spesific metadata from table_meta
 
-        # Update keyword values from spesific metadata for this data product (table_meta_px)
-        keywords = self._update_keywords_with_spesific_metadata(keywords, table_meta_px)
+        # Update keyword values from spesific metadata for this data product
+        keywords = self._update_standalone_keywords(keywords, table_meta_px)
+
+        # Update interconnected keyword values (for example adding data column names and values in different languages)
+        keywords = self._update_interconnected_keywords(keywords, table_meta_cr)
 
         # Get px-lines for all keywords. Requested languages are included.
         meta_lines = self._get_all_px_lines_from_keywords(keywords, keywords['LANGUAGES'].get_value())
@@ -151,9 +154,6 @@ class PXDataProduct:
                 heading_list.append(column)
         pxpyfactory.helpers.print_filter(f"  Updated heading_list: {heading_list}", 2)
 
-        # self.rename_stuff(self.rename_map) # rename_map
-        # table_data = self.rename_table_data(self.rename_map, table_data)
-
         # Ensure correct formatting of content
         for column in table_data.columns:
             if column in data_list:
@@ -178,10 +178,10 @@ class PXDataProduct:
     
 
     # _____________________________________________________________________________
-    def _update_keywords_with_spesific_metadata(self, keywords, table_meta_px):
-        # Update or add keyword values from _meta file (spesific for this data product - table_meta_px).
-        # For each row in table_meta_px, the value and language are added to the corresponding keyword instance in keywords.
-        # If the keyword from table_meta_px is not found in keywords, a warning is printed and the keyword is ignored.
+    # Update or add keyword values from _meta file (spesific for this data product - table_meta_px).
+    # For each row in table_meta_px, the value and language are added to the corresponding keyword instance in keywords.
+    # If the keyword from table_meta_px is not found in keywords, a warning is printed and the keyword is ignored.
+    def _update_standalone_keywords(self, keywords, table_meta_px):
         for _, row in table_meta_px.iterrows():
             keyword = row['KEYWORD']
             language = row['LANGUAGE']
@@ -195,6 +195,29 @@ class PXDataProduct:
                     keywords[keyword].set_value(value) # Add value to the keyword instance without language
             else:
                 pxpyfactory.helpers.print_filter(f"WARNING: Keyword '{keyword}' from spesific metadata not found in metadata base. This keyword will be ignored.", 1)
+
+        return keywords
+
+    # _____________________________________________________________________________
+    # Rename columns from table data based on values from _meta file (spesific for this data product - table_meta_cr).
+    # Renaming of columns triggers updating several interconnected keywords.
+    def _update_interconnected_keywords(self, keywords, table_meta_cr):
+        for _, row in table_meta_cr.iterrows():
+            column = row['KEYWORD']
+            language = row['LANGUAGE']
+            value = row['VALUE']
+
+            if not pxpyfactory.validation.valid_value(column) or not pxpyfactory.validation.valid_value(value):
+                continue
+            if not pxpyfactory.validation.valid_value(language):
+                language = None
+
+            # List of keywords that have interconnected values that need to be updated together
+            keywords_interconnected = ['STUB', 'HEADING', 'CONTVARIABLE', 'VALUES', 'UNITS', 'TIMEVAL', 'LAST-UPDATED', 'CONTACT', 'PRECISION']
+
+            for keyword in keywords_interconnected:
+                keywords[keyword].update_scope_value_if_match(column, value, language)
+                keywords[keyword].update_value_if_match(column, value, language)
 
         return keywords
 
@@ -219,15 +242,16 @@ class PXDataProduct:
         
         table_meta_px      = table_meta[table_meta['TYPE'] == 'PX'][['KEYWORD', 'LANGUAGE', 'VALUE']]      # create df with only px parameters
         table_meta_sq      = table_meta[table_meta['TYPE'] == 'SQ'][['KEYWORD', 'LANGUAGE', 'VALUE']]      # create df with only sq parameters
-        table_meta_rename  = table_meta[table_meta['TYPE'] == 'RENAME'][['KEYWORD', 'LANGUAGE', 'VALUE']]  # create df with only rename parameters
-        return table_meta_px, table_meta_sq, table_meta_rename
+        table_meta_cr      = table_meta[table_meta['TYPE'] == 'CR'][['KEYWORD', 'LANGUAGE', 'VALUE']]      # create df with only cr parameters
+        return table_meta_px, table_meta_sq, table_meta_cr
         
 
 
     # _____________________________________________________________________________
-    def _set_keywords_base_for_data_product(self):
+    # Raw keyword values from input table and metadata are set in keywords base. This is done before interconnected keywords are updated to ensure that there are values to update from.
+    # Language for initial values taken directly from input table or metadata without translation
+    def _set_keywords_base_for_data_product(self, language_initial='raw'):
         keywords = copy.deepcopy(self.main_app.keywords_base) # Detached copy of keywords_base and keywords in it; changes here must not affect main_app.keywords_base
-        language_initial = 'raw' # Language for initial values taken directly from input table or metadata without translation
 
         initial_keyword_values = {
             'TABLEID':       self.tableid,

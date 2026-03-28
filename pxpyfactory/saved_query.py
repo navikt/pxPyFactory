@@ -17,7 +17,7 @@ class SavedQueryGenerator:
         """
         self.table_id = data_product.tableid
         self.table_meta_sq = data_product.table_meta_sq.copy()
-        self.rename_map = data_product.rename_map
+        # self.rename_map = data_product.rename_map
         self.stub_list = data_product.stub_list
         self.heading_list = data_product.heading_list
         self.data_list = data_product.data_list
@@ -47,10 +47,10 @@ class SavedQueryGenerator:
         Returns:
             JSON string for .sqa file
         """
-        # Apply rename map to SQ parameters
-        self.table_meta_sq['KEYWORD'] = self.table_meta_sq['KEYWORD'].map(
-            lambda x: self.rename_map.get(x, x)
-        )
+        # # Apply rename map to SQ parameters
+        # self.table_meta_sq['KEYWORD'] = self.table_meta_sq['KEYWORD'].map(
+        #     lambda x: self.rename_map.get(x, x)
+        # )
         
         # Build selection array with all variables
         selection = []

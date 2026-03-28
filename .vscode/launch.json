@@ -1,7 +1,39 @@
 {
-    "name": "Debug pxpyfactory as module",
-    "type": "python",
-    "request": "launch",
-    "module": "pxpyfactory",
-    "cwd": "${workspaceFolder}"
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug run.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/run.py",
+            "console": "integratedTerminal",
+            "args": ["build=agg_bt_px_mottaker_fylke", "print=0"],
+            "justMyCode": false
+        },
+        {
+            "name": "Debug pxpyfactory as module",
+            "type": "python",
+            "request": "launch",
+            "module": "pxpyfactory",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Debug with args",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/run.py",
+            "console": "integratedTerminal",
+            "args": ["build=agg_bt_px_mottaker_fylke", "print=1"],
+            "justMyCode": true
+        },
+        {
+            "name": "Debug with args and no justMyCode",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/run.py",
+            "console": "integratedTerminal",
+            "args": ["build=agg_bt_px_mottaker_fylke", "print=1"],
+            "justMyCode": false
+        }
+    ]
 }

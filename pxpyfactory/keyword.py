@@ -131,6 +131,55 @@ class Keyword:
         return self._coerce_value(input_value)
     
     # _____________________________________________________________________________
+    # _____________________________________________________________________________
+    # This function is used to update the scope_value for the given language of the keyword if the provided column matches the scope (or a part of the scope).
+    # It is used for interconnected keywords where the value of one keyword (for example HEADING) determines the scope_value of another keyword (for example VALUES).
+    def update_scope_value_if_match(self, column, value, language):
+        scopes_with_column = self._get_deep_scope_match(column)
+        if len(scopes_with_column) < 1:
+            return
+        for scope in scopes_with_column:
+            self.set_scope_value(value, language=language, scope=scope, only_replace_this_value=column)
+
+    # _____________________________________________________________________________
+    def _get_deep_scope_match(self, scope_to_match):
+        matched_scopes = []
+        scopes = [scope for scope in self.value.keys() if scope is not None]
+        for scope in scopes:    
+            if '", "' in scope:
+                splitted_scope = scope.split('", "')
+            else:
+                splitted_scope = [scope]
+            if scope_to_match in splitted_scope:
+                matched_scopes.append(scope)
+        return matched_scopes
+    # _____________________________________________________________________________
+    def update_value_if_match(self, column, value, language):
+        return
+
+    # _____________________________________________________________________________
+    # Scope_value is the showed text in different languages.
+    def set_scope_value(self, value, language=None, scope=None, only_replace_this_value=None):
+        if not self.language_dependent:
+            language = None  # Ignore language if not language-dependent
+
+        # If scope_value is a list or tuple, convert it to a comma-separated string for consistent handling and storage.
+        if isinstance(value, (list, tuple)):
+            value = '", "'.join(value)
+        # This will ensure that the value dictionary is properly initialized for the given scope and language.
+        # And scope is converted to a comma-separated string if it is a list or tuple.
+        scope = self._prepare_scope_language(language=language, scope=scope)
+
+        if only_replace_this_value is not None:
+            current_scope_value = self._get_scope_value(language=language, scope=scope, strictly_enforce_language=True)
+            if current_scope_value is None:
+                current_scope_value = self._get_scope_value(language='raw', scope=scope, strictly_enforce_language=True)
+            if current_scope_value is not None:
+                value = current_scope_value.replace(only_replace_this_value, value)
+
+        self.value[scope][language]['scope_value'] = value
+
+    # _____________________________________________________________________________
     def set_value(self, value, language=None, scope=None, append=None, set_as_default_value=False):
         if append is None:
             append = self.set_value_use_append
@@ -147,14 +196,10 @@ class Keyword:
             self.default_value = prepared_value
             return
 
-        if isinstance(scope, (list, tuple)):
-            scope = '", "'.join(scope) # Convert list or tuple of scopes to a comma-separated string for consistent handling and storage.
-        # Ensure the value dictionary is properly initialized for the given scope and language
-        if scope not in self.value or not isinstance(self.value.get(scope), dict):
-            self.value[scope] = {}
+        scope = self._prepare_scope_language(language=language, scope=scope)
 
         if append:
-            new_value = self.value[scope].get(language) # Get the existing value for the scope and language (which may be None, a single value, or a list of values).
+            new_value = self.value[scope][language].get('value') # Get the existing value for the scope and language (which may be None, a single value, or a list of values).
             if not isinstance(new_value, list):
                 new_value = [new_value] if new_value is not None else []
             if isinstance(prepared_value, list):
@@ -164,7 +209,22 @@ class Keyword:
         else:
             new_value = prepared_value
 
-        self.value[scope][language] = new_value
+        self.value[scope][language]['value'] = new_value
+
+
+    # _____________________________________________________________________________
+    def _prepare_scope_language(self, language=None, scope=None, update_value_dict=True):
+        # If scope is a list or tuple, convert it to a comma-separated string for consistent handling and storage.
+        if isinstance(scope, (list, tuple)):
+            scope = '", "'.join(scope)
+        if update_value_dict:
+            # Ensure the scope dictionary is properly initialized
+            if scope not in self.value or not isinstance(self.value.get(scope), dict):
+                self.value[scope] = {}
+            # Ensure the language dictionary is properly initialized for the given scope
+            if language not in self.value.get(scope) or not isinstance(self.value.get(scope).get(language), dict):
+                self.value[scope][language] = {}
+        return scope
 
     # _____________________________________________________________________________
     # This function is currently not in use,
@@ -197,6 +257,27 @@ class Keyword:
 
     # _____________________________________________________________________________
     # _____________________________________________________________________________
+    def _get_scope_value(self, language=None, scope=None, strictly_enforce_language=None):
+        if not self.language_dependent:
+            language = None  # Ignore language if not language-dependent
+        if strictly_enforce_language is None:
+            strictly_enforce_language = self.strictly_enforce_language
+        scope = self._prepare_scope_language(language=language, scope=scope, update_value_dict=False)
+        scope_ref = self.value.get(scope)
+        if scope_ref:
+            scope_language_ref = scope_ref.get(language)
+            return_candidate = scope_language_ref.get('scope_value') if scope_language_ref else None
+            if pxpyfactory.validation.valid_value(return_candidate):
+                return return_candidate
+
+            if not strictly_enforce_language: # Search for any value in the same scope if specific language is not found or not valid.
+                for language_values in scope_ref.values(): # Iterate through all language values for this scope. It searches in the order languages was added.
+                    return_candidate = language_values.get('scope_value')
+                    if pxpyfactory.validation.valid_value(return_candidate):
+                        return return_candidate
+            
+        return scope
+    # _____________________________________________________________________________
     def get_value(
         self,
         language=None,
@@ -214,26 +295,28 @@ class Keyword:
         if allow_empty_return_value is None:
             allow_empty_return_value = self.allow_empty_return_value
 
-        def pick_from_scope(scope_key):
+        def pick_from_scope(scope_key, language):
             scope_values = self.value.get(scope_key)
             if not isinstance(scope_values, dict): # No values stored for this scope.
                 return None
 
-            return_candidate = scope_values.get(language)
+            scope_language_ref = scope_values.get(language)
+            return_candidate = scope_language_ref.get('value') if scope_language_ref else None
             # If found value is a valid value for the specific scope and language it is a match.
             # If the found value is not valid, but allow_empty_return_value is True and the value is not None, we will return it anyway.
             if (allow_empty_return_value and return_candidate is not None) or pxpyfactory.validation.valid_value(return_candidate):
                 return return_candidate
 
             if not strictly_enforce_language: # Search for any value in the same scope if specific language is not found or not valid.
-                for return_candidate in scope_values.values():
+                for language_values in scope_values.values(): # Iterate through all language values for this scope. It searches in the order languages was added.
+                    return_candidate = language_values.get('value')
                     if (allow_empty_return_value and return_candidate is not None) or pxpyfactory.validation.valid_value(return_candidate):
                         return return_candidate
 
             return None
 
         # 1) Try requested scope first
-        value = pick_from_scope(scope)
+        value = pick_from_scope(scope, language)
         if value is not None:
             return value
 
@@ -247,7 +330,7 @@ class Keyword:
                 other_scopes.insert(0, None)
 
             for other_scope in other_scopes:
-                value = pick_from_scope(other_scope)
+                value = pick_from_scope(other_scope, language)
                 if value is not None:
                     return value
 
@@ -274,9 +357,10 @@ class Keyword:
             for scope in scopes_to_use:
                 for language in target_languages:
                     value = self.get_value(language=language, scope=scope)
+                    scope_value = self._get_scope_value(language=language, scope=scope)
                     if self.use_default_value_as_base or self.set_value_use_append:
                         value = self._merge_value(value)
-                    lines.append(self._to_px_line(language=language, scope=scope, value=value))
+                    lines.append(self._to_px_line(language=language, scope=scope_value, value=value))
         else:
             if self.mandatory: # If the keyword is mandatory, but the value is empty
                 # we will return the keyword with an empty value or the default value if provided.
