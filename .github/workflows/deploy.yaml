@@ -1,10 +1,18 @@
-name: Deploy to NAIS and run
+name: Deploy px creator and run
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        type: choice
+        required: true
+        default: 'dev'
+        options:
+          - dev
+          - prod
 
 permissions:
   contents: read
@@ -25,15 +33,16 @@ jobs:
           team: statistikkbank
           salsa: true
 
-  deploy-dev:
-    name: Deploy dev gcp
+  deploy:
+    name: Deploy px creator to - ${{ github.event.inputs.environment || 'dev' }}
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
     needs: [build-and-push]
     steps:
       - uses: actions/checkout@v5
-      - name: Deploy to dev-gcp
+      - name: Deploy-
         uses: nais/deploy/actions/deploy@v2
         env:
-          CLUSTER: dev-gcp
+          CLUSTER: ${{ vars.DEPLOYMENT_CLUSTER }}
           RESOURCE: naisjob.yaml
           VAR: image=${{ needs.build-and-push.outputs.image }}

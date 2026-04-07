@@ -124,7 +124,9 @@ class PXMain:
         self.production_log.write_log(self.px_files_written_ref)
 
         if (self.deployment_needed and not pxpyfactory.helpers.get_input_args('no_deploy')) or pxpyfactory.helpers.get_input_args('deploy'):
-            pxpyfactory.deployment.trigger_deployment()
+            environment = pxpyfactory.helpers.get_input_args('environment')
+            branch = pxpyfactory.helpers.get_input_args('branch')
+            pxpyfactory.deployment.trigger_deployment(environment, branch)
 
 
 

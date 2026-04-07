@@ -215,9 +215,9 @@ class PXDataProduct:
             # List of keywords that have interconnected values that need to be updated together
             keywords_interconnected = ['STUB', 'HEADING', 'CONTVARIABLE', 'VALUES', 'UNITS', 'TIMEVAL', 'LAST-UPDATED', 'CONTACT', 'PRECISION']
 
-            for keyword in keywords_interconnected:
-                keywords[keyword].update_scope_value_if_match(column, value, language)
-                keywords[keyword].update_value_if_match(column, value, language)
+            # for keyword in keywords_interconnected:
+            #     keywords[keyword].update_scope_value_if_match(column, value, language)
+            #     keywords[keyword].update_value_if_match(column, value, language)
 
         return keywords
 
@@ -269,10 +269,10 @@ class PXDataProduct:
             keywords[keyword_name].set_value(keyword_value, language=language_initial)
 
         # Values for contents variable must be added first. Must also be in correct formatting
-        keywords['VALUES'].set_value(self.data_list, scope=self.contvariable, language=language_initial) 
+        keywords['VALUES'].set_value(self.data_list, scope_name=self.contvariable, language=language_initial) 
 
         for key, value in self.values_dict.items():
-            keywords['VALUES'].set_value(value, scope=key, language=language_initial)
+            keywords['VALUES'].set_value(value, scope_name=key, language=language_initial)
             if key in self.timeval_list:
                 tlist_id = None
                 check_value = value[0]
@@ -291,7 +291,7 @@ class PXDataProduct:
                     #     tlist_id = 'x'  # Interval data
                 if tlist_id is not None:
                     timeval_value = ['TLIST(' + tlist_id + ')'] + value
-                    keywords['TIMEVAL'].set_value(timeval_value, scope=key, language=language_initial)
+                    keywords['TIMEVAL'].set_value(timeval_value, scope_name=key, language=language_initial)
 
         ## Prepare px-parameters
         # If it is not stated in metadata, get last updated time from data file
@@ -313,8 +313,8 @@ class PXDataProduct:
         # Add px-parameter for each data column:
         for index, data_col in enumerate(self.data_list):
             # Some keyword values are set to None for each data column. This will make them find a value set for other scopes and languages or use the default value.
-            keywords['LAST-UPDATED'].set_value(None, scope=data_col, language=language_initial)
-            keywords['CONTACT'].set_value(None, scope=data_col, language=language_initial)
+            keywords['LAST-UPDATED'].set_value(None, scope_name=data_col, language=language_initial)
+            keywords['CONTACT'].set_value(None, scope_name=data_col, language=language_initial)
 
             # If there is more data columns than units, use the first unit for the rest
             if self.units_list == []:
@@ -324,20 +324,20 @@ class PXDataProduct:
             else:
                 units_value = self.units_list[0]
 
-            keywords['UNITS'].set_value(units_value, scope=data_col, language=language_initial)
+            keywords['UNITS'].set_value(units_value, scope_name=data_col, language=language_initial)
 
             try:
                 data_precision = int(self.data_precision_list[index])
             except Exception:
                 data_precision = None
             if data_precision is not None:
-                keywords['PRECISION'].set_value(data_precision, scope=(self.contvariable, data_col), language=language_initial)
+                keywords['PRECISION'].set_value(data_precision, scope_name=[self.contvariable, data_col], language=language_initial)
             
             # If needed, more data-column specific px-parameters can be added. Value can be based on 'spesific_value' and implementet a few lines lower.
-            # keywords['STOCKFA'].set_value(value, scope=data_col, language=language_initial)
-            # keywords['CFPRICES'].set_value(value, scope=data_col, language=language_initial)
-            # keywords['DAYADJ'].set_value(value, scope=data_col, language=language_initial)
-            # keywords['SEASADJ'].set_value(value, scope=data_col, language=language_initial)
+            # keywords['STOCKFA'].set_value(value, scope_name=data_col, language=language_initial)
+            # keywords['CFPRICES'].set_value(value, scope_name=data_col, language=language_initial)
+            # keywords['DAYADJ'].set_value(value, scope_name=data_col, language=language_initial)
+            # keywords['SEASADJ'].set_value(value, scope_name=data_col, language=language_initial)
 
         return keywords
 
@@ -349,7 +349,7 @@ class PXDataProduct:
         sorted_keywords = sorted(keywords.items(), key=lambda item: item[1].order)
 
         for keyword_name, keyword in sorted_keywords:
-            pxpyfactory.helpers.print_filter(f"Keyword: {keyword_name} - order: {keyword.order} - value: {keyword.value} - default_value: {keyword.default_value}", 4)
+            pxpyfactory.helpers.print_filter(f"Keyword: {keyword_name} - order: {keyword.order} - scope_refs: {keyword.scope_refs} - default_value: {keyword.default_value}", 4)
             if keyword.order < 1000: # Only include keywords with order < 1000 in the .px file; the rest are used for internal handling and not part of the final .px content
                 keyword_lines = keyword.get_px_lines(languages=languages, warn_on_missing_mandatory=True)
                 list_of_lines.extend(keyword_lines)

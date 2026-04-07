@@ -7,7 +7,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/run.py",
             "console": "integratedTerminal",
-            "args": ["build=agg_bt_px_mottaker_fylke", "print=0"],
+            "args": ["build=agg_bt_px_mottaker_fylke", "print=0", "no_deploy", "test"],
             "justMyCode": false
         },
         {
@@ -27,12 +27,12 @@
             "justMyCode": true
         },
         {
-            "name": "Debug with args and no justMyCode",
+            "name": "Debug with full print",
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/run.py",
             "console": "integratedTerminal",
-            "args": ["build=agg_bt_px_mottaker_fylke", "print=1"],
+            "args": ["build=agg_bt_px_mottaker_fylke", "print=5", "test_full"],
             "justMyCode": false
         }
     ]
