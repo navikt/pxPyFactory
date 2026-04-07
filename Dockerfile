@@ -1,9 +1,10 @@
 FROM europe-north1-docker.pkg.dev/cgr-nav/pull-through/nav.no/python:3.14.0-dev AS dev
 USER root
-RUN apk add --update shadow build-base
+RUN apk add --update build-base
 WORKDIR /pyfactory
-RUN useradd -M -d /pyfactory/ -u 1069 -s /bin/bash pyfactory && \
-    chown -R pyfactory:pyfactory /pyfactory/
+RUN addgroup -g 1069 -S pyfactory && \
+    adduser -S -D -H -h /pyfactory -u 1069 -G pyfactory -s /bin/sh pyfactory && \
+    chown -R 1069:1069 /pyfactory/
 COPY requirements.txt .
 ENV PIP_TARGET=/pyfactory/lib/python3.14/site-packages
 ENV PYTHONPATH=$PIP_TARGET
@@ -14,8 +15,7 @@ FROM europe-north1-docker.pkg.dev/cgr-nav/pull-through/nav.no/python:3.14
 COPY pxpyfactory pxpyfactory
 COPY run.py .
 COPY --from=dev /pyfactory/lib/python3.14/site-packages/ /pyfactory/lib/python3.14/site-packages/
-COPY --from=dev /etc/passwd /etc/passwd
-USER pyfactory
+USER 1069
 ENV PYTHONPATH=/pyfactory/lib/python3.14/site-packages
 
-ENTRYPOINT ["python", "run.py"]
+ENTRYPOINT ["python", "run.py", "clean", "build=all"]
