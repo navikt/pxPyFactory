@@ -2,7 +2,7 @@ FROM europe-north1-docker.pkg.dev/cgr-nav/pull-through/nav.no/python:3.14.0-dev 
 USER root
 RUN apk add --update shadow build-base
 WORKDIR /pyfactory
-RUN useradd -m -d /pyfactory/ -u 1069 -s /bin/bash pyfactory && \
+RUN useradd -M -d /pyfactory/ -u 1069 -s /bin/bash pyfactory && \
     chown -R pyfactory:pyfactory /pyfactory/
 COPY requirements.txt .
 ENV PIP_TARGET=/pyfactory/lib/python3.14/site-packages
