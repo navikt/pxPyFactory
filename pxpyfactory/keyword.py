@@ -21,6 +21,7 @@ class Keyword:
                     strictly_enforce_language=False,
                     strictly_enforce_scope=True, 
                     scope_can_not_be_both_none_and_specific=True, # If True and specific scope is provided, None scope is just fallback and not included from get_px_lines().
+                    use_value_from_none_scope_if_specific_scope_has_no_value=True,
                     allow_empty_return_value=False,
                     set_value_use_append=False, # If True, when set_value is called multiple times for the same scope and language, the values will be appended to a list instead of overwriting each other.
                     use_default_value_as_base=False,
@@ -38,17 +39,18 @@ class Keyword:
 
         # If mandatory is any of these strings the keyword will be considered mandatory, and always included in the output px file.
         # If no value is set for a mandatory keyword, the default value will be used if provided, otherwise an empty value will be written in the px file.
-        self.mandatory                                      = self._interpret_boolean(mandatory, input_true_values={'yes', 'nav'})
-        self.multiline                                      = self._interpret_boolean(multiline, input_true_values={'yes'})
-        self.language_dependent                             = self._interpret_boolean(language_dependent)
-        self.value_type, self.valid_values, self.max_length = self._derive_value_constraints(value_type, length)
-        self.strictly_enforce_language                      = self._interpret_boolean(strictly_enforce_language)
-        self.strictly_enforce_scope                         = self._interpret_boolean(strictly_enforce_scope)
-        self.scope_can_not_be_both_none_and_specific        = self._interpret_boolean(scope_can_not_be_both_none_and_specific)
-        self.allow_empty_return_value                       = self._interpret_boolean(allow_empty_return_value)
-        self.set_value_use_append                           = self._interpret_boolean(set_value_use_append)
-        self.use_default_value_as_base                      = self._interpret_boolean(use_default_value_as_base)
-        self.default_value                                  = self._split_if_str_with_char(default_value, ';')
+        self.mandatory                                                = self._interpret_boolean(mandatory, input_true_values={'yes', 'nav'})
+        self.multiline                                                = self._interpret_boolean(multiline, input_true_values={'yes'})
+        self.language_dependent                                       = self._interpret_boolean(language_dependent)
+        self.value_type, self.valid_values, self.max_length           = self._derive_value_constraints(value_type, length)
+        self.strictly_enforce_language                                = self._interpret_boolean(strictly_enforce_language)
+        self.strictly_enforce_scope                                   = self._interpret_boolean(strictly_enforce_scope)
+        self.scope_can_not_be_both_none_and_specific                  = self._interpret_boolean(scope_can_not_be_both_none_and_specific)
+        self.use_value_from_none_scope_if_specific_scope_has_no_value = self._interpret_boolean(use_value_from_none_scope_if_specific_scope_has_no_value)
+        self.allow_empty_return_value                                 = self._interpret_boolean(allow_empty_return_value)
+        self.set_value_use_append                                     = self._interpret_boolean(set_value_use_append)
+        self.use_default_value_as_base                                = self._interpret_boolean(use_default_value_as_base)
+        self.default_value                                            = self._split_if_str_with_char(default_value, ';')
         
         # Each keyword can have from 0 to many scopes. If the keyword do not have any scopes, the value will be stored with scope=None.
         # Each scope have one name and one value for 0 to many languages each. If the keyword do not have any scopes, the name of the None scope is irrelevant/not in use.
@@ -138,28 +140,16 @@ class Keyword:
     
     # _____________________________________________________________________________
     # _____________________________________________________________________________
-    # This function is used to update the scope_value for the given language of the keyword if the provided column matches the scope (or a part of the scope).
-    # It is used for interconnected keywords where the value of one keyword (for example HEADING) determines the scope_value of another keyword (for example VALUES).
-    # def update_scope_value_if_match(self, column, value, language):
-    #     scopes_with_column = self._get_deep_scope_match(column)
-    #     if not scopes_with_column:
-    #         return
-    #     for scope in scopes_with_column:
-    #         self.set_scope_value(value, language=language, scope=scope, only_replace_this_value=column)
-
-    # # _____________________________________________________________________________
-    # def _get_deep_scope_match(self, scope_to_match):
-    #     return [
-    #         scope
-    #         for scope in self.value.keys()
-    #         if scope is not None and scope_to_match in (scope.split('", "') if '", "' in scope else [scope])
-    #     ]
-    # # _____________________________________________________________________________
-    # def update_value_if_match(self, column, value, language):
-    #     return
+    # This function is used to update the scope (name and value) for the given language of the keyword if the provided column matches the scope (or a part of the scope).
+    # It is used ut update interconnected keywords.
+    def update_columns(self, column=None, value=None, language=None):
+        if self.name in ['HEADING'] and column in ['STAT_VAR', 'AAR_KVARTAL']: # and language == 'en':
+            pass
+        for scope_ref in self.scope_refs:
+            scope_ref.update_translation(from_value=column, to_value=value, language=language)
 
     # _____________________________________________________________________________
-    # Retur the scope or scopes that match the input scope.
+    # Return the scope or scopes that match the input scope.
     # Input scope may be a string or a list of strings.
     # If the input scope is a list of strings, it will be considered a match if
     # all of the strings in the list matches the scope or is included in the scope.
@@ -312,14 +302,20 @@ class Keyword:
 
         scope_refs_to_use = self.scope_refs.copy()
         if len(scope_refs_to_use) > 0:
-            if self.scope_can_not_be_both_none_and_specific and len(scope_refs_to_use) > 1:
-                scope_none_refs = self.get_scope_ref(scope_name_to_match=None, only_exact_match=True, create_if_not_exist=False)
+            scope_none_refs = self.get_scope_ref(scope_name_to_match=None, only_exact_match=True, create_if_not_exist=False)
+
+            if self.scope_can_not_be_both_none_and_specific and (len(scope_none_refs) > 0) and (len(scope_none_refs) != len(scope_refs_to_use)):
                 for scope_ref in scope_none_refs:
                     scope_refs_to_use.remove(scope_ref)
 
             for scope_ref in scope_refs_to_use:
                 for language in target_languages:
                     value = scope_ref.get_value(language=language, strictly_enforce_language=self.strictly_enforce_language)
+                    if value is None and self.use_value_from_none_scope_if_specific_scope_has_no_value:
+                        for scope_none_ref in scope_none_refs:
+                            value = scope_none_ref.get_value(language=language, strictly_enforce_language=self.strictly_enforce_language)
+                            if value is not None:
+                                break # Only use the first None scope that has a value, if there are multiple None scopes.
                     scope_name = scope_ref.get_name(language=language, strictly_enforce_language=self.strictly_enforce_language)
                     if self.use_default_value_as_base or self.set_value_use_append:
                         value = self._merge_value(value)

@@ -38,7 +38,21 @@ class MultilingualValue:
                 return return_candidate
 
         return None
+    
+    # ________________________________________________________________
+    def _get_language_list(self, language=None, strictly_enforce_language=False):
+        return_language_list = [language]
 
+        if not strictly_enforce_language:
+            stored_languages = list(self._values.keys()).copy()
+            if language in stored_languages:
+                stored_languages.remove(language)
+            if None in stored_languages: # Move None to the next position after the requested language, so that it is checked before other languages but after the requested language.
+                stored_languages.remove(None)
+                return_language_list.append(None)
+            return_language_list.extend(stored_languages)
+
+        return return_language_list
 
 class MultilingualValueScope:
     def __init__(self, scope_name=None):
@@ -59,33 +73,46 @@ class MultilingualValueScope:
     def get_value(self, language=None, strictly_enforce_language=True, allow_empty_return_value=True):
         return self.value.get(language=language, strictly_enforce_language=strictly_enforce_language)
 
-    # def set_value(self, value, language=None, append=False):
-    #     if append:
-    #         existing_value = self._value.get_exact(language=language)
-    #         if not isinstance(existing_value, list):
-    #             existing_value = [existing_value] if existing_value is not None else []
-    #         if isinstance(value, list):
-    #             existing_value.extend(value)
-    #         else:
-    #             existing_value.append(value)
-    #         self._value.set(existing_value, language=language)
-    #         return
+    def update_translation(self, from_value, to_value, language=None):
+        if language is None:
+            # if language is None, we want to check all languages for both name and value except 'raw', and update all languages where the from_value is found
+            name_languages_to_check = {lang for lang in self.name._values.keys() if lang != 'raw'}
+            name_languages_to_check.add(None)
+            value_languages_to_check = {lang for lang in self.value._values.keys() if lang != 'raw'}
+            value_languages_to_check.add(None)
+        else:
+            name_languages_to_check = [language]
+            value_languages_to_check = [language]
 
-    #     self._value.set(value, language=language)
+        # sjekk om det finnes en oversettelse for det aktuelle språket
+        for language in name_languages_to_check:
+            for get_language in [language, None, 'raw']:
+                current_name = self.get_name(language=get_language)
+                if current_name is not None:
+                    updated_name = self._replace_in_value(current_name, from_value, to_value)
+                    if updated_name != current_name:
+                        self.set_name(scope_name=updated_name, language=language)
+                    break
 
-    # def get_value(self, language=None, strictly_enforce_language=False, allow_empty_return_value=False):
-    #     return self._value.get(
-    #         language=language,
-    #         strictly_enforce_language=strictly_enforce_language,
-    #         allow_empty_return_value=allow_empty_return_value,
-    #     )
+        for language in value_languages_to_check:
+            for get_language in [language, None, 'raw']:
+                current_value = self.get_value(language=get_language)
+                if current_value is not None:
+                    updated_value = self._replace_in_value(current_value, from_value, to_value)
+                    if updated_value != current_value:
+                        self.set_value(value=updated_value, language=language)
+                    break
 
-    # def set_scope_value(self, value, language=None):
-    #     self._scope_value.set(value, language=language)
+    def _replace_in_value(self, value, from_value, to_value):
+        if isinstance(value, list):
+            updated_list = []
+            for v in value:
+                if v == from_value:
+                    updated_list.append(to_value)
+                else:
+                    updated_list.append(v)
+            return updated_list
+        elif value == from_value:
+            return to_value
+        return value
 
-    # def get_scope_value(self, language=None, strictly_enforce_language=False, allow_empty_return_value=False):
-    #     return self._scope_value.get(
-    #         language=language,
-    #         strictly_enforce_language=strictly_enforce_language,
-    #         allow_empty_return_value=allow_empty_return_value,
-    #     )

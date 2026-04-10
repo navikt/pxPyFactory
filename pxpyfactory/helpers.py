@@ -1,13 +1,11 @@
 import sys
-import pxpyfactory.validation
-
 
 # Set the input arguments for the module to use
 input_args = {}
 
 
+# Parse command line arguments into global input_args dictionary.
 def set_input_args():
-    """Parse command line arguments into global input_args dictionary."""
     global input_args
     sys_argv = sys.argv[1:] if len(sys.argv) > 1 else []
     input_args = {}
@@ -25,16 +23,16 @@ def set_input_args():
     print_filter(f"Input arguments: {input_args}", 0)
 
 
+# Get command line arguments. If type is None, returns all args, otherwise returns specific arg.
 def get_input_args(type=None):
-    """Get command line arguments. If type is None, returns all args, otherwise returns specific arg."""
     if type == None:
         return input_args
     else:
         return input_args.get(type, None)
 
 
+# Print output only if priority_level is <= print level from command line args.
 def print_filter(output, priority_level=0):
-    """Print output only if priority_level is <= print level from command line args."""
     print_level = get_input_args('print')
     try:
         print_level = int(print_level)
@@ -44,11 +42,9 @@ def print_filter(output, priority_level=0):
         print(output)
 
 
+# Shorten table reference to max 20 chars (excluding separators) by truncating each part.
+# Removes '_' and '-' separators from the tableid.
 def shorten_tableid(tableid):
-    """
-    Shorten table reference to max 20 chars (excluding separators) by truncating each part.
-    Removes '_' and '-' separators from the tableid.
-    """
     import re
     tableid_str = str(tableid)
     text_parts = re.split(r'[_-]', tableid_str)  # Split by '_' and '-' to get text parts only
@@ -65,17 +61,15 @@ def shorten_tableid(tableid):
     return ''.join(truncated_parts)
 
 
+# Convert a delimited string to a list with optional transformations.
+# Args:
+#     in_string: String to convert
+#     separator: Delimiter to split on (default: ',')
+#     to_upper: Convert to uppercase (default: True)
+#     split_part: If not None, extract this part after splitting by '#'
+# Returns:
+#     List of processed strings
 def prep_list_from_string(in_string, separator=',', to_upper=True, split_part=0):
-    """
-    Convert a delimited string to a list with optional transformations.
-    Args:
-        in_string: String to convert
-        separator: Delimiter to split on (default: ',')
-        to_upper: Convert to uppercase (default: True)
-        split_part: If not None, extract this part after splitting by '#'
-    Returns:
-        List of processed strings
-    """
     if in_string is None:
         out_list = []
     elif isinstance(in_string, str):
@@ -87,8 +81,8 @@ def prep_list_from_string(in_string, separator=',', to_upper=True, split_part=0)
     return out_list
 
 
+# Helper function for prep_list_from_string to process individual substring.
 def _prep_list_from_string_mod(substring, to_upper, split_part):
-    """Helper function for prep_list_from_string to process individual substring."""
     if split_part is not None:
         try:
             substring = substring.split('#')[split_part]

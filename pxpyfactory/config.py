@@ -1,3 +1,5 @@
+# Code partly AI generated
+# Many not in use, but kept for potential future use
 """
 Configuration settings for pxPyFactory
 Centralizes all configuration values, paths, and constants
@@ -14,24 +16,24 @@ from typing import List
 class GoogleCloudStorage:
     """Google Cloud Storage configuration"""
     # Input bucket - CSV files, logs, work files (private)
-    BUCKET_INPUT = "pxpyfactory-input"
+    BUCKET_INPUT = "pxpyfactory-input" #in_use#
     
     # Output bucket - Generated PX files (shared with API)
-    BUCKET_OUTPUT = "pxpyfactory-output" # "pxweb-api-input"
+    BUCKET_OUTPUT = "pxpyfactory-output" # "pxweb-api-input" #in_use#
 
 
 @dataclass
 class GitHubConfig:
     """GitHub deployment configuration"""
-    OWNER = "navikt"
-    REPO = "pxweb-api"
-    WORKFLOW_FILE = "deploy.yml"
-    DEFAULT_ENVIRONMENT = "dev"
-    DEFAULT_BRANCH = "main"
-    API_VERSION = "2022-11-28"
-    ENV_VAR_TOKEN = "GITHUB_TOKEN_PX"
-    ACCEPT_HEADER = "application/vnd.github+json"
-    SUCCESS_STATUS_CODE = 204
+    OWNER = "navikt" #in_use#
+    REPO = "pxweb-api" #in_use#
+    WORKFLOW_FILE = "deploy.yml" #in_use#
+    DEFAULT_ENVIRONMENT = "dev" #in_use#
+    DEFAULT_BRANCH = "main" #in_use#
+    API_VERSION = "2022-11-28" #in_use#
+    ENV_VAR_TOKEN = "GITHUB_TOKEN_PX" #in_use#
+    ACCEPT_HEADER = "application/vnd.github+json" #in_use#
+    SUCCESS_STATUS_CODE = 204 #in_use#
 
 
 # ============================================================================
@@ -39,14 +41,13 @@ class GitHubConfig:
 # ============================================================================
 
 @dataclass
-class Paths:
+class Paths: #in_use#
     """File and directory paths"""
-    INPUT = "stats"
-    OUTPUT = "px"
-    SAVED_QUERY_OUTPUT = "sq"
-    COMMON_METADATA_FILE = "common_meta.xlsx"
-    LOG_FOLDER = "log"
-    PRODUCTION_LOG_FILE = "log/production_log.jsonl"
+    INPUT = "stats" #in_use#
+    OUTPUT = "px" #in_use#
+    SAVED_QUERY_OUTPUT = "sq" #in_use#
+    COMMON_METADATA_FILE = "common_meta.xlsx" #in_use#
+    PRODUCTION_LOG_FILE = "log/production_log.jsonl" #in_use#
 
 
 @dataclass
@@ -138,8 +139,8 @@ class LogColumns:
 @dataclass
 class LogTypes:
     """Log entry type identifiers used in production log"""
-    SUMMARY = "summary"
-    TABLE = "table"
+    SUMMARY = "summary" #in_use#
+    TABLE = "table" #in_use#
 
 
 # ============================================================================
@@ -154,7 +155,7 @@ class Defaults:
     HEADER_ROW = 0
     CONTVARIABLE_NAME = "STAT_VAR"
     TABLEID_MAX_LENGTH = 20
-    MAX_SQ_CELLS = 500000  # Maximum cells viewable in pxWeb2
+    MAX_SQ_CELLS = 500000  # Maximum cells viewable in pxWeb2 #in_use#
 
 
 @dataclass

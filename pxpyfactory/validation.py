@@ -2,14 +2,12 @@ import pandas as pd
 from datetime import datetime
 
 
+# Format a timestamp as a string.
+# Args:
+#     timestamp: datetime object, Unix timestamp, or None (uses current time)
+# Returns:
+#     Formatted string: "YYYYMMDD HH:MM"
 def get_time_formatted(timestamp=None):
-    """
-    Format a timestamp as a string.
-    Args:
-        timestamp: datetime object, Unix timestamp, or None (uses current time)
-    Returns:
-        Formatted string: "YYYYMMDD HH:MM"
-    """
     if timestamp is None:
         return_time = datetime.now()
     elif isinstance(timestamp, datetime):
@@ -24,15 +22,13 @@ def get_time_formatted(timestamp=None):
     return return_time.strftime("%Y%m%d %H:%M")
 
 
+# Check if a value is valid and return it, or return None if invalid.
+# Args:
+#     value: Value to check
+#     full: If True, also treats '-', '.', '..' as invalid
+# Returns:
+#     The value if valid, None otherwise
 def valid_value_or_none(value, full=False):
-    """
-    Check if a value is valid and return it, or return None if invalid.
-    Args:
-        value: Value to check
-        full: If True, also treats '-', '.', '..' as invalid
-    Returns:
-        The value if valid, None otherwise
-    """
     # Handle None first
     if value is None:
         return None
@@ -75,21 +71,19 @@ def valid_value_or_none(value, full=False):
     return value
 
 
+# Check if a value is valid (not None, not empty, etc.).
 def valid_value(value, full=False):
-    """Check if a value is valid (not None, not empty, etc.)."""
     return not valid_value_or_none(value, full=full) is None
 
 
+# Check if two values are the same after normalization.
 def same_value(value1, value2):
-    """Check if two values are the same after normalization."""
     return valid_value_or_none(value1, full=True) == valid_value_or_none(value2, full=True)
 
 
+# Returns the first non-null value in a row.
+# If all values are null, returns an empty string.
 def get_first_notnull(row):
-    """
-    Returns the first non-null value in a row.
-    If all values are null, returns an empty string.
-    """
     for value in row:
         if valid_value(value):
             return value
@@ -98,8 +92,8 @@ def get_first_notnull(row):
     return ''
 
 
+# Check if a list is None, empty, or contains only empty/NAN values.
 def is_list_empty(check_list):
-    """Check if a list is None, empty, or contains only empty/NAN values."""
     if check_list is None:
         return True
     elif check_list in ([''], ['NAN']):

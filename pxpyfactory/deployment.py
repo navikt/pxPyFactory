@@ -9,9 +9,6 @@ load_dotenv()
 
 
 def trigger_deployment(environment=None, branch=None):
-    """
-    Trigger deployment workflow and print a summary message.
-    """
     deployment_success = trigger_github_deployment(environment, branch)
 
     if deployment_success:
@@ -23,16 +20,6 @@ def trigger_deployment(environment=None, branch=None):
 
 
 def trigger_github_deployment(environment=None, branch=None):
-    """
-    Trigger deployment workflow on pxweb-api repository
-    
-    Args:
-        environment: Environment to deploy to (default from config)
-        branch: Branch to deploy from (default from config)
-    
-    Returns:
-        bool: True if deployment was triggered successfully, False otherwise
-    """
     # Use config defaults if not specified
     if environment is None:
         environment = pxpyfactory.config.github.DEFAULT_ENVIRONMENT

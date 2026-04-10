@@ -5,8 +5,8 @@ import pxpyfactory.helpers
 import pxpyfactory.validation
 
 
+# Get and prepare data products for PX file generation from Excel sheet.
 def prepare_data_products(common_meta_filepath):
-    """Get and prepare data products for PX file generation from Excel sheet."""
     data_products = pxpyfactory.file_io.file_read(common_meta_filepath, sheet_name='dataprodukter')
     data_products = data_products.map(lambda x: str(x) if pd.notnull(x) else None)
 
@@ -40,8 +40,8 @@ def prepare_data_products(common_meta_filepath):
     return data_products
 
 
+# Prepare alias folder names from Excel sheets - common for all data products.
 def prepare_alias(common_meta_filepath):
-    """Prepare alias folder names from Excel sheets - common for all data products."""
     alias = pxpyfactory.file_io.file_read(common_meta_filepath, sheet_name='folder-alias')
     pxpyfactory.helpers.print_filter('Alias table:', 3)
     pxpyfactory.helpers.print_filter(alias, 3)
@@ -55,8 +55,8 @@ def prepare_alias(common_meta_filepath):
     return alias
 
 
+# Create the folder structure to put the PX files in.
 def update_folder_structure(data_products_df, alias_df, output_path):
-    """Create the folder structure to put the PX files in."""
     path_list = []
     languages = ['no', 'en']
     for _, row in data_products_df.iterrows():
@@ -78,8 +78,8 @@ def update_folder_structure(data_products_df, alias_df, output_path):
             pxpyfactory.file_io.file_write(file_path, alias_value)
 
 
+# Prepare general metadata from Excel sheets - common for all data products.
 def prepare_keywords_base(common_meta_filepath):
-    """Prepare general metadata from Excel sheets - common for all data products."""
     meta_default = pxpyfactory.file_io.file_read(common_meta_filepath, sheet_name='metadata-default')
     meta_default = meta_default[['ORDER', 'KEYWORD', 'MANDATORY', 'LANGUAGE_DEPENDENT', 'DEFAULT_VALUE', 'TYPE', 'LENGTH', 'MULTILINE']]
     meta_default = meta_default[meta_default['KEYWORD'].apply(pxpyfactory.validation.valid_value)]  # Remove rows with invalid or missing keyword values

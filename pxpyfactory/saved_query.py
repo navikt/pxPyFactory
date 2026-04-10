@@ -4,34 +4,18 @@ import pxpyfactory.helpers
 
 
 class SavedQueryGenerator:
-    """
-    Generates saved query files (.sqa and .sqs) for PX data products.
-    """
     
     def __init__(self, data_product):
-        """
-        Initialize with data from a PXDataProduct instance.
-        
-        Args:
-            data_product: PXDataProduct instance containing table metadata and values
-        """
         self.table_id = data_product.tableid
         self.table_meta_sq = data_product.table_meta_sq.copy()
-        # self.rename_map = data_product.rename_map
         self.stub_list = data_product.stub_list
         self.heading_list = data_product.heading_list
         self.data_list = data_product.data_list
         self.values_dict = data_product.values_dict
         self.contvariable = data_product.contvariable
-        self.language = "no"
+        self.keywords = data_product.keywords
     
     def generate_sqs(self):
-        """
-        Creates content for a .sqs (saved query statistics) file.
-        
-        Returns:
-            JSON string for .sqs file
-        """
         current_time = datetime.now(timezone.utc).isoformat()
         sqs_structure = {
             "Created": current_time,
@@ -41,23 +25,25 @@ class SavedQueryGenerator:
         return json.dumps(sqs_structure, indent=4, ensure_ascii=False)
     
     def generate_sqa(self):
-        """
-        Creates content for a .sqa (saved query attributes) file.
-        
-        Returns:
-            JSON string for .sqa file
-        """
-        # # Apply rename map to SQ parameters
-        # self.table_meta_sq['KEYWORD'] = self.table_meta_sq['KEYWORD'].map(
-        #     lambda x: self.rename_map.get(x, x)
-        # )
         
         # Build selection array with all variables
         selection = []
         all_variables = [self.contvariable] + self.heading_list + self.stub_list
+
+        # Create translated twin
+        language = self.keywords['LANGUAGE'].get_value()
+        # heading_translated inneholder også contvariable
+        heading_translated = self.keywords['HEADING'].get_value(language=language)
+        if not isinstance(heading_translated, (list, tuple)):
+            heading_translated = [heading_translated]
+        stub_translated = self.keywords['STUB'].get_value(language=language)
+        if not isinstance(stub_translated, (list, tuple)):
+            stub_translated = [stub_translated]
+        all_variables_translated = heading_translated + stub_translated
+
         
         total_cells = 1
-        for var in all_variables:
+        for var, var_translated in zip(all_variables, all_variables_translated):
             if var == self.contvariable:
                 value_count = len(self.data_list)
             else:
@@ -99,10 +85,12 @@ class SavedQueryGenerator:
             value_codes = [str(i) for i in selected_indices]
             
             selection.append({
-                "VariableCode": var,
+                "VariableCode": var_translated,
                 "CodeList": None,
                 "ValueCodes": value_codes
             })
+        
+        # Translate column names () to correct language
         
         # Build the complete structure
         sqa_structure = {
@@ -110,11 +98,11 @@ class SavedQueryGenerator:
             "Selection": {
                 "Selection": selection,
                 "Placement": {
-                    "Heading": [self.contvariable] + self.heading_list,
-                    "Stub": self.stub_list
+                    "Heading": heading_translated,
+                    "Stub": stub_translated
                 }
             },
-            "Language": self.language,
+            "Language": language,
             "TableId": self.table_id,
             "OutputFormat": 2,
             "OutputFormatParams": []

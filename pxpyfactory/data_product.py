@@ -40,15 +40,13 @@ class PXDataProduct:
         self.sqa_output_path     = "/".join([self.main_app.sq_output_path, self.tableid[0], self.tableid + '.sqa'])
         self.sqs_output_path     = "/".join([self.main_app.sq_output_path, self.tableid[0], self.tableid + '.sqs'])
 
-        # self.keywords            = {}
+        self.keywords            = {}
 
         # Common variables to be set later:
         # self.table_data          = pd.DataFrame() # DataFrame with the actual data from input file
         # self.table_meta_px       = pd.DataFrame() # DataFrame with px parameters from spesific metadata file
         self.table_meta_sq       = pd.DataFrame() # DataFrame with sq parameters from spesific metadata file (this is used in the SavedQueryGenerator)
         self.values_dict         = {} # Dictionary with unique values for each column in the data table (this is also used in the SavedQueryGenerator)
-        # self.rename_map          = {} # Dictionary mapping original column names to renamed ones
-        # self.translation_map     = main_app.translation_base.copy() # DataFrame mapping original text to translations for different languages (built from metadata with language-specific renames)
 
         self.list_of_lines       = [] # Final list of lines to be written to .px file
 
@@ -89,6 +87,8 @@ class PXDataProduct:
 
         # Combine meta lines and data lines into final list of lines to be written to .px file
         self.list_of_lines = meta_lines + ['DATA='] + data_lines + [';']
+
+        self.keywords = keywords # Store keywords in self to be able to use them later when creating Saved Query files (.sqa and .sqs)
     
         return True
 
@@ -202,6 +202,9 @@ class PXDataProduct:
     # Rename columns from table data based on values from _meta file (spesific for this data product - table_meta_cr).
     # Renaming of columns triggers updating several interconnected keywords.
     def _update_interconnected_keywords(self, keywords, table_meta_cr):
+        # Order the rows in table_meta_cr to enshure that updates on spesified languages are done after updates on non-specified languages (all languages)
+        table_meta_cr = table_meta_cr.sort_values(by=['LANGUAGE'], na_position='first')
+
         for _, row in table_meta_cr.iterrows():
             column = row['KEYWORD']
             language = row['LANGUAGE']
@@ -213,11 +216,17 @@ class PXDataProduct:
                 language = None
 
             # List of keywords that have interconnected values that need to be updated together
-            keywords_interconnected = ['STUB', 'HEADING', 'CONTVARIABLE', 'VALUES', 'UNITS', 'TIMEVAL', 'LAST-UPDATED', 'CONTACT', 'PRECISION']
+            # These keywords are interconnected because they all refer to the same column names and values in the data table,
+            #   and changes in one of them should be reflected in the others to maintain consistency.
+            # For example, if a column name is renamed, it should be updated in all these keywords
+            #   to ensure that the correct values are associated with the correct columns in the generated .px file.
+            keywords_interconnected = ['STUB', 'HEADING', 'CONTVARIABLE', 'VALUES', 'TIMEVAL', 'UNITS', 'PRECISION', 'LAST-UPDATED', 'CONTACT']
 
-            # for keyword in keywords_interconnected:
-            #     keywords[keyword].update_scope_value_if_match(column, value, language)
-            #     keywords[keyword].update_value_if_match(column, value, language)
+            for keyword in keywords_interconnected:
+                if keywords[keyword] is None:
+                    pxpyfactory.helpers.print_filter(f"WARNING: Keyword '{keyword}' is missing.", 1)
+                    continue
+                keywords[keyword].update_columns(column=column, value=value, language=language)
 
         return keywords
 
