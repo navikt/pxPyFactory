@@ -143,7 +143,8 @@ class Keyword:
     # This function is used to update the scope (name and value) for the given language of the keyword if the provided column matches the scope (or a part of the scope).
     # It is used ut update interconnected keywords.
     def update_columns(self, column=None, value=None, language=None):
-        if self.name in ['HEADING'] and column in ['STAT_VAR', 'AAR_KVARTAL']: # and language == 'en':
+        # Next line is just to be able to stop at this ponint when debugging.
+        if self.name in ['TIMEVAL'] and column in ['STAT_VAR', 'AAR_KVARTAL']: # and language == 'en':
             pass
         for scope_ref in self.scope_refs:
             scope_ref.update_translation(from_value=column, to_value=value, language=language)
@@ -290,7 +291,7 @@ class Keyword:
     # _____________________________________________________________________________
     # Returns the full value of the keyword in a format that can be directly written to the px file.
     # It may return several lines.
-    def get_px_lines(self, languages=None, warn_on_missing_mandatory=False):
+    def get_px_lines(self, languages=None, main_language=None, warn_on_missing_mandatory=False):
         if not self.language_dependent or languages is None:
             target_languages = [None]
         elif isinstance(languages, str):
@@ -319,12 +320,12 @@ class Keyword:
                     scope_name = scope_ref.get_name(language=language, strictly_enforce_language=self.strictly_enforce_language)
                     if self.use_default_value_as_base or self.set_value_use_append:
                         value = self._merge_value(value)
-                    lines.append(self._to_px_line(language=language, scope_name=scope_name, value=value))
+                    lines.append(self._to_px_line(language=language, main_language=main_language, scope_name=scope_name, value=value))
         else:
             if self.mandatory: # If the keyword is mandatory, but the value is empty
                 # we will return the keyword with an empty value or the default value if provided.
                 for language in target_languages:
-                    lines.append(self._to_px_line(language=language, scope_name=None, value=self.default_value))
+                    lines.append(self._to_px_line(language=language, main_language=main_language, scope_name=None, value=self.default_value))
                     if warn_on_missing_mandatory and self.default_value is None:
                         if language is None:
                             pxpyfactory.helpers.print_filter(f"WARNING: Mandatory keyword '{self.name}' is missing a value. Writing empty value in px file.", 1)
@@ -352,9 +353,9 @@ class Keyword:
         return value
     
     # _____________________________________________________________________________
-    def _to_px_line(self, language, scope_name, value):
+    def _to_px_line(self, language, main_language, scope_name, value):
         line_str = self.name
-        if language is not None:
+        if (language is not None) and (language != main_language): # main_language may be written without language tag in the px file.
             line_str += f"[{language}]"
         if scope_name is not None:
             if isinstance(scope_name, (list, tuple)):

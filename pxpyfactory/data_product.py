@@ -78,8 +78,8 @@ class PXDataProduct:
         # Update interconnected keyword values (for example adding data column names and values in different languages)
         keywords = self._update_interconnected_keywords(keywords, table_meta_cr)
 
-        # Get px-lines for all keywords. Requested languages are included.
-        meta_lines = self._get_all_px_lines_from_keywords(keywords, keywords['LANGUAGES'].get_value())
+        # Get px-lines for all keywords. Requested languages are included. Main language is included if that language should be without language tag in the .px file.
+        meta_lines = self._get_all_px_lines_from_keywords(keywords, keywords['LANGUAGES'].get_value(), keywords['LANGUAGE'].get_value())
  
         # data_lines are the lines with the actual data content to be written to the .px file.
         fill_value = keywords['DATASYMBOL2'].get_value()
@@ -351,19 +351,19 @@ class PXDataProduct:
         return keywords
 
     # _____________________________________________________________________________
-    def _get_all_px_lines_from_keywords(self, keywords, languages):
+    def _get_all_px_lines_from_keywords(self, keywords, languages, main_language):
         # Get lines for all keywords to be written to the .px file. This includes handling of language-specific values and warnings for missing mandatory values.
-        list_of_lines = []
+        keyword_output_lines = []
         
         sorted_keywords = sorted(keywords.items(), key=lambda item: item[1].order)
 
         for keyword_name, keyword in sorted_keywords:
             pxpyfactory.helpers.print_filter(f"Keyword: {keyword_name} - order: {keyword.order} - scope_refs: {keyword.scope_refs} - default_value: {keyword.default_value}", 4)
             if keyword.order < 1000: # Only include keywords with order < 1000 in the .px file; the rest are used for internal handling and not part of the final .px content
-                keyword_lines = keyword.get_px_lines(languages=languages, warn_on_missing_mandatory=True)
-                list_of_lines.extend(keyword_lines)
+                keyword_lines = keyword.get_px_lines(languages=languages, main_language=main_language, warn_on_missing_mandatory=True)
+                keyword_output_lines.extend(keyword_lines)
 
-        return list_of_lines
+        return keyword_output_lines
 
     # _____________________________________________________________________________
     # Create the data content lines to the px-file.

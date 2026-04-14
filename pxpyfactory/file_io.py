@@ -167,6 +167,8 @@ def file_read(file_path, sheet_name='Ark1', sep=';', header=0, clean=True):
             content = _read_gcs_file(file_path)
             if content is None:
                 return df
+            # Remove lines starting with -- (SQL-style comments)
+            content = '\n'.join([line for line in content.split('\n') if not line.strip().startswith('--')])
              # Use python engine if sep is None to auto-detect separator, else default engine (engine is not spesified)
             df = pd.read_csv(io.StringIO(content), sep=sep, decimal=',', header=header, **({'engine': 'python'} if sep is None else {}))
         elif file_path.endswith('.jsonl'):

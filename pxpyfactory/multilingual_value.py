@@ -39,20 +39,6 @@ class MultilingualValue:
 
         return None
     
-    # ________________________________________________________________
-    def _get_language_list(self, language=None, strictly_enforce_language=False):
-        return_language_list = [language]
-
-        if not strictly_enforce_language:
-            stored_languages = list(self._values.keys()).copy()
-            if language in stored_languages:
-                stored_languages.remove(language)
-            if None in stored_languages: # Move None to the next position after the requested language, so that it is checked before other languages but after the requested language.
-                stored_languages.remove(None)
-                return_language_list.append(None)
-            return_language_list.extend(stored_languages)
-
-        return return_language_list
 
 class MultilingualValueScope:
     def __init__(self, scope_name=None):
@@ -84,7 +70,6 @@ class MultilingualValueScope:
             name_languages_to_check = [language]
             value_languages_to_check = [language]
 
-        # sjekk om det finnes en oversettelse for det aktuelle språket
         for language in name_languages_to_check:
             for get_language in [language, None, 'raw']:
                 current_name = self.get_name(language=get_language)

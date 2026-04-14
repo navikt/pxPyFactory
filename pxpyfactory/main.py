@@ -17,7 +17,6 @@ class PXMain:
 
         self.data_products_df: pd.DataFrame = pd.DataFrame()
         self.keywords_base: dict = {}
-        # self.translation_base: pd.DataFrame = pd.DataFrame()
         self.production_log: pxpyfactory.log.PXLog = None
         self.alias_df: pd.DataFrame = pd.DataFrame()
         self.mainprep_ok: bool = False
@@ -59,7 +58,6 @@ class PXMain:
 
         self.data_products_df = pxpyfactory.main_praparation.prepare_data_products(self.common_meta_filepath) # Get and prepare data products for px file generation from Excel-sheet.
         self.keywords_base = pxpyfactory.main_praparation.prepare_keywords_base(self.common_meta_filepath) # Get and prepare keywords base for px file generation from Excel-sheet.
-        # self.translation_base = pxpyfactory.translation.prepare_translation(self.common_meta_filepath) # Get translation table for multi-language support
 
         # Check if there has been any changes to common meta since last production
         if self.production_log.common_meta_change() or pxpyfactory.helpers.get_input_args('build') == 'all':
