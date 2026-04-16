@@ -107,8 +107,11 @@ class PXDataProduct:
             return True
     # _____________________________________________________________________________
     # _____________________________________________________________________________
+    # Update stub_list, heading_list and data_list based on content of table_data if any of the lists are empty
+    # If data_list is empty, first select column(s) for data_list based on number of unique values in them.
+    # Then select stub_list and heading_list based on remaining columns.
+    # TIMEVAL can also be found and set (probably based on column name=TIMEVAL or TIME) if it is empty, but this funktionality is not implemented yet.
     def _prepare_columns(self, table_data, stub_list, heading_list, data_list):
-        # Update stub_list, heading_list and data_list based on content of table_data if any of the lists are empty
         remaining_columns = table_data.columns.tolist()
         pxpyfactory.helpers.print_filter(f"  All columns in table: {remaining_columns}", 2)
 
