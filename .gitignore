@@ -6,6 +6,8 @@ pxpyfactory/__pycache__/
 input_bucket/*
 !input_bucket/.gitkeep
 !input_bucket/*.xlsx
+!input_bucket/stats/
+input_bucket/stats/*
 !input_bucket/stats/*.csv
 
 output_bucket/*

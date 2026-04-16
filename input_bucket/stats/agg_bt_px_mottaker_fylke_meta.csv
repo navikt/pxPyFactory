@@ -1,0 +1,49 @@
+-- This file contains updates and additions to the data table.
+-- It can modify most parameters, but some, like TABLEID and MATRIX can not be modified here.
+-- All types different from PX, CR and SQ are ignored.
+-- Keywords not present in meta-default sheet/tab in common_meta.xlsx are ignored.
+
+type;keyword;language;value
+
+PX;TITLE;en;Recevers of child care distributed on county
+PX;CONTENTS;en;Child care receivers,
+PX;LAST-UPDATED;;20251111 11:11
+PX;INFO;;Ingen ekstra informasjon fra familieteamet.
+PX;NOTE;no;Annen statistikk om barnetrgd finner du [her](https://www.nav.no/no/nav-og-samfunn/statistikk/familie-statistikk/barnetrygd) .
+PX;NOTE;en;More statistics about child care: [link](https://www.nav.no/no/nav-og-samfunn/statistikk/familie-statistikk/barnetrygd)
+PX;LINK;;https://www.nav.no/no/nav-og-samfunn/statistikk/familie-statistikk/barnetrygd
+PX;NOTEX;no;Denne tabellen er laget for å vise funksjonaliteten til parametrene innen px-formatet.
+PX;NOTEX;en; 
+
+-- CONTACT parts must be separated with #. They are appended to default, and several can be added here.
+PX;CONTACT;;Team familie#Statistikkseksjonen#+47 12345678#team_familie@nav.no
+
+-- CR, Column Rename, is used to show intuitive and translated names on columns.
+CR;fylke;no;fylke
+CR;fylke;en;county
+CR;AAR_KVARTAL;no;år-kvartal
+CR;AAR_KVARTAL;en;year_quarter
+CR;Antall;no;antall
+CR;Antall;en;amount
+CR;prosenT;no;prosent
+CR;prosenT;en;percent
+CR;stat_var;no;statistikkvariabel
+CR;stat_var;en;statvar
+
+-- SQ, Saved Query, is used to set a standard view of the table when it is opened.
+-- Languages are ignored here.
+-- The number represents the amount of values selected on each column.
+-- A negative number selects values from the other end of the list of values.
+SQ;fylke;;14
+SQ;aar_kvartal;;-4
+SQ;stat_var;;2
+
+
+
+-- PX;CONTACT-HEADER;;Team familie
+-- PX;CONTACT-BODY;;Statistikkseksjonen
+-- PX;CONTACT-PHONE;;+47 12345678
+-- PX;CONTACT-EMAIL;;team_familie@nav.no
+-- PX;VALUENOTE("Fylke","03 Oslo");;Oslo er hovedstaden i Norge
+-- PX;VALUENOTE("År-kvartal","2025K2");;Andre kvartal i 2025 utmerker seg egentlig ikke.
+-- PX;CELLNOTE("11 Rogaland","*","2025K1");;Denne cellen inneholder verdien 64295 eller 4,7.
