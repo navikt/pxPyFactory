@@ -39,11 +39,3 @@ SQ;aar_kvartal;;-4
 SQ;stat_var;;2
 
 
-
--- PX;CONTACT-HEADER;;Team familie
--- PX;CONTACT-BODY;;Statistikkseksjonen
--- PX;CONTACT-PHONE;;+47 12345678
--- PX;CONTACT-EMAIL;;team_familie@nav.no
--- PX;VALUENOTE("Fylke","03 Oslo");;Oslo er hovedstaden i Norge
--- PX;VALUENOTE("År-kvartal","2025K2");;Andre kvartal i 2025 utmerker seg egentlig ikke.
--- PX;CELLNOTE("11 Rogaland","*","2025K1");;Denne cellen inneholder verdien 64295 eller 4,7.
