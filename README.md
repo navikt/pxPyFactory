@@ -1,215 +1,148 @@
-Innholdet nedenfor er AI generert.
+# pxPyFactory
 
-## pxPyFactory: Kodeforklaring
+Bygger PX-filer og Saved Query-filer fra metadata og datagrunnlag.
 
-Denne README-en beskriver hvordan pxPyFactory bygger PX-filer og Saved Query-filer fra metadata og datagrunnlag i Google Cloud Storage.
+## Hva prosjektet gjør
 
-## Hva løsningen gjør
+Prosjektet leser metadata og tabellfiler, og produserer:
 
-pxPyFactory leser:
-- felles metadata fra common_meta.xlsx
-- tabellfiler per dataprodukt (csv, kan inkludere parquet senere)
-- valgfri tabellspesifikk metadatafil med suffix _meta.csv
+- PX-filer (`.px`)
+- Saved Query-filer (`.sqa` og `.sqs`)
+- Produksjonslogg (`log/production_log.jsonl`)
 
-Deretter produseres:
-- en PX-fil per tabell
-- et sett med Saved Query-filer (.sqa og .sqs) per tabell
-- oppdatert produksjonslogg (jsonl)
+Kjøringen er inkrementell: hvis input ikke har endret seg siden forrige kjøring, hopper den over unødvendig bygging.
 
-## Kjøreflyt fra start til slutt
+## Kjøreflyt
 
-1. Startpunkt er run.py som kaller pxpyfactory.__main__.go().
-2. go() oppretter PXMain og kjører run().
-3. PXMain.mainprep() leser argumenter, sjekker endringer via logg, forbereder metadata og mappestruktur.
-4. For hver rad i dataproduktlisten kjøres PXMain.process_data_product().
-5. PXDataProduct.create_px_content() bygger alle PX-linjer (metadata + DATA-seksjon).
-6. Fil skrives til output-bucket.
-7. SavedQueryGenerator lager .sqa og .sqs.
-8. PXMain.log_and_deploy() skriver logg og kan trigge deploy.
+1. `run.py` kaller `pxpyfactory.__main__.go()`.
+2. `PXMain.mainprep()` leser argumenter, gjør eventuell `clean`, sjekker endringer og forbereder metadata.
+3. For hvert dataprodukt bygges PX-innhold og filer skrives.
+4. Saved Query-filer genereres.
+5. Produksjonslogg skrives, og deploy kan trigges.
 
-## Viktigste moduler og ansvar
+## Lagring (lokal vs GCS)
 
-### pxpyfactory/main.py
+`pxpyfactory/file_io.py` delegerer all IO til valgt backend.
 
-Orkestrering av hele byggeløpet.
+### Lokal modus
 
-Viktige metoder:
-- mainprep():
-	- parser CLI-argumenter (helpers.set_input_args)
-	- håndterer clean
-	- sjekker om input/common metadata er endret (PXLog)
-	- bygger data_products_df og keywords_base
-	- oppdaterer alias-filer og mappestruktur ved behov
-- process_data_product():
-	- avgjør om tabellen må bygges
-	- bygger PX-innhold
-	- skriver PX-fil
-	- genererer saved query
-- log_and_deploy():
-	- skriver oppsummeringslogg
-	- trigger deploy hvis betingelser er oppfylt
+I lokal modus brukes mapper i repo:
 
-### pxpyfactory/data_product.py
+- `input_bucket/` for input
+- `output_bucket/` for output
 
-Representerer ett dataprodukt (én tabell) og inneholder logikken for å bygge den konkrete PX-filen.
+Stier som starter med `px/` eller `sq/` skrives i `output_bucket/`. Andre stier leses fra `input_bucket/`.
 
-Hovedsteg i create_px_content():
-- les tabellfil
-- normaliser kolonner og identifiser STUB/HEADING/DATA
-- bygg values_dict med unike verdier for dimensjoner
-- opprett keywords-basert modell for tabellen
-- les og splitt tabellspesifikk metadata i:
-	- PX (vanlige keyword-verdier)
-	- SQ (saved query-innstillinger)
-	- CR (column rename/oversettelser)
-- oppdater keyword-objekter
-- generer ferdige PX-linjer
-- generer DATA-seksjon med komplett kombinasjon av dimensjonsverdier
+### GCS-modus
 
-Viktig detalj:
-- contvariable settes til STAT_VAR internt, og brukes som innholdsvariabel i HEADING/CONTVARIABLE/VALUES.
+I GCS-modus brukes bucket-navn fra config:
 
-### pxpyfactory/keyword.py og pxpyfactory/multilingual_value.py
+- `pxpyfactory.config.gcs.BUCKET_INPUT`
+- `pxpyfactory.config.gcs.BUCKET_OUTPUT`
 
-Dette er kjerne for håndtering av PX-keywords.
+Samme sti-logikk gjelder her: `px/` og `sq/` rutes til output, resten til input.
 
-Keyword-klassen støtter:
-- språkavhengige verdier
-- scopes (for eksempel VALUES("fylke"), PRECISION("STAT_VAR", "antall"))
-- fallback til default-verdi
-- validering/coercion av typer
-- serialisering til korrekt PX-linjeformat
+### Bytte backend
 
-MultilingualValue og MultilingualValueScope gir:
-- lagring av verdi per språk
-- fallback-regler når språk mangler
-- oppdatering av verdier ved rename/oversettelse (CR)
+Bytt import i `pxpyfactory/file_io.py`:
 
-### pxpyfactory/main_praparation.py
+Lokal:
 
-Forberedelse av felles metadata:
-- prepare_data_products(): leser dataprodukter-ark, korter tableid, filtrerer på BUILD og build-argument
-- prepare_keywords_base(): bygger base med Keyword-objekter fra metadata-default
-- prepare_alias(): leser alias for mapper
-- update_folder_structure(): skriver alias_no.txt og alias_en.txt i outputstruktur
+```python
+# import pxpyfactory.file_io_gcs as _backend
+import pxpyfactory.file_io_local as _backend
+```
 
-### pxpyfactory/saved_query.py
+GCS:
 
-Genererer saved query-filer.
+```python
+import pxpyfactory.file_io_gcs as _backend
+# import pxpyfactory.file_io_local as _backend
+```
 
-generate_sqa() bygger en Selection-struktur med:
-- VariableCode
-- ValueCodes
-- Placement (Heading/Stub)
+## Viktige inputfiler
 
-generate_sqs() lager enkel statistikkblokk med Created/LastUsed/UsageCount.
+- Lokal modus:
+	- `input_bucket/common_meta.xlsx`
+	- `input_bucket/stats/*.csv` (tabellfiler)
+	- `input_bucket/stats/*_meta.csv` (tabellspesifikk metadata)
+- GCS-modus:
+	- `<input-bucket>/common_meta.xlsx`
+	- `<input-bucket>/stats/*.csv`
+	- `<input-bucket>/stats/*_meta.csv`
 
-Merk:
-- SQA må bruke variablekoder som matcher språk/metadata riktig. Ulik kode mellom PX og SQA kan føre til at PXWeb ikke godtar query.
+## Kjøring fra terminal
 
-### pxpyfactory/file_io.py
+Eksempler under er for PowerShell på Windows.
 
-All IO mot Google Cloud Storage.
+### 1) Oppsett
 
-Modulen:
-- velger input- eller output-bucket basert på sti
-- leser xlsx/csv/jsonl til pandas
-- skriver filer
-- henter filstørrelse og endringstid
-- sletter innhold ved clean
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
 
-### pxpyfactory/log.py
+Hvis du kjører i GCS-modus må du i tillegg autentisere mot Google Cloud (ADC), for eksempel:
 
-Endringsdeteksjon og produksjonslogg.
+```powershell
+gcloud auth login --update-adc
+```
 
-PXLog sammenligner nåsituasjon med siste loggede kjøring for å avgjøre:
-- om input har endret seg
-- om common metadata har endret seg
-- om et konkret dataprodukt har endret seg
+### 2) Standard kjøring
 
-Dette er grunnlaget for inkrementelle bygg.
+```powershell
+python run.py
+```
 
-### pxpyfactory/config.py
+### 3) Kjøring med argumenter
 
-Sentral konfigurasjon:
-- bucket-navn
-- standard paths
-- navnekonstanter
-- terskler som MAX_SQ_CELLS
+Argumenter leses som `key=value` eller flagg uten verdi.
 
-## Datakontrakt i metadata
+```powershell
+python run.py build=all print=1
+```
 
-common_meta.xlsx inneholder blant annet:
-- dataprodukter: hvilke tabeller som skal bygges
-- metadata-default: basisdefinisjon av keywords
-- folder-alias: navn på mappealias per språk
+```powershell
+python run.py build=agg_bt_px_mottaker_fylke no_deploy print=2
+```
 
-Tabellspesifikk metadata i denne pipelinen leses fra <TABLEID_RAW>_meta.csv (ikke fra ark i common_meta.xlsx).
+```powershell
+python run.py clean build=all
+```
 
-Tabellspesifikk _meta.csv forventer feltene TYPE, KEYWORD, VALUE, og valgfritt LANGUAGE.
+```powershell
+python run.py test build=all print=3
+```
 
-TYPE brukes slik:
-- PX: setter vanlig PX-keyword-verdi
-- SQ: styrer saved query utvalg
-- CR: rename/oversettelse av kolonner og relaterte keyword-scopes
+```powershell
+python run.py deploy environment=dev branch=main
+```
 
-## Hvordan DATA-seksjonen bygges
+## Støttede argumenter
 
-For korrekt PX-format må datasettet dekke alle kombinasjoner av STUB + HEADING.
+- `build=all`: bygg alle tabeller
+- `build=<TABLEID eller TABLEID_RAW>`: bygg kun én tabell
+- `clean`: slett innhold i output/sq før bygg
+- `test`: skriv resultat til konsoll i stedet for å skrive filer
+- `test_full`: som `test`, men skriver hele filinnhold
+- `print=<nivå>`: loggnivå (høyere tall gir mer logging)
+- `no_deploy`: hopp over deploy selv om filer er bygget
+- `deploy`: tving deploy
+- `environment=<navn>`: deploy-miljø
+- `branch=<navn>`: branch for deploy
 
-Logikken i _get_lines_of_data_from_table():
-- bygger kartesisk produkt av alle dimensjonsverdier
-- left join mot faktiske data
-- fyller manglende celler med DATASYMBOL2
-- pivoterer til PX-rekkefølge
-- skriver hver rad som space-separert streng
+## Deploy-forutsetning
 
-Dette sikrer stabil og komplett DATA-blokk selv ved manglende observasjoner.
+Deploy bruker GitHub Actions dispatch og krever miljøvariabel:
 
-## Kommandoargumenter
+- `GITHUB_TOKEN_PX`
 
-Argumenter leses i helpers.set_input_args(). Eksempler:
-- build=all: bygg alle
-- build=<tableid>: bygg én tabell
-- clean: tøm output/sq før bygg
-- test: skriv ut i stedet for å lagre filer
-- test_full: skriv ut full filtekst
-- no_deploy: hopp over deploy
-- deploy: tving deploy
-- print=<nivå>: loggnivå
+Denne kan settes i miljøet eller i `.env`.
 
-## Typiske feilkilder
+## Nyttige tips
 
-1. Ulik navngiving av variabler på tvers av keyword-linjer
-Hvis for eksempel HEADING/CONTVARIABLE/VALUES/PRECISION ikke peker på samme variabelkode, kan PXWeb avvise filen.
-
-2. Språkoversettelse brukt inkonsistent
-Hvis språkspesifikke navn brukes i noen felter, men rå-navn i andre, kan det gi mismatch i både PX og SQA.
-
-3. Ufullstendig metadata
-Manglende KEYWORD eller feil TYPE i _meta.csv kan gi stille fallback eller manglende linjer.
-
-4. For mange celler i standard query
-SQA begrenses av MAX_SQ_CELLS. Ved overskridelse kuttes antall valgte verdier per variabel.
-
-## Praktisk debug-oppskrift
-
-1. Kjør med print=3 eller print=4 for å se hvilke keywords/scopes som bygges.
-2. Verifiser at samme variabelkode brukes konsekvent i:
-	 - HEADING
-	 - CONTVARIABLE
-	 - VALUES(scope)
-	 - PRECISION(scope)
-3. Kontroller at eventuelle CR-renames også slår gjennom i Saved Query-filen.
-4. Sammenlign fungerende og ikke-fungerende PX med fokus på keyword-sammenheng, ikke bare tekstlikhet.
-
-## Kort oppsummering
-
-Arkitekturen er delt i:
-- orkestrering (PXMain)
-- per-tabell byggelogikk (PXDataProduct)
-- keyword/språk/scope-modell (Keyword + MultilingualValue)
-- IO og endringsdeteksjon (file_io + PXLog)
-- query-generering (SavedQueryGenerator)
-
-Denne oppdelingen gjør at pipeline kan bygges inkrementelt, samtidig som PX-formatet holdes konsistent på tvers av språk, scopes og tabeller.
+- Bruk `print=2` eller `print=3` ved feilsøking.
+- Bruk `build=<tableid>` for rask iterasjon på én tabell.
+- Bruk `test` eller `test_full` når du vil validere output uten å skrive filer.
+- Start i lokal modus når du utvikler, og bytt til GCS-modus når du vil kjøre mot bucket-data.
