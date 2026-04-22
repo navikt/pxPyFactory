@@ -193,9 +193,9 @@ class PXDataProduct:
                 value = pxpyfactory.keyword_contact.shape_to_px(value) # Ensure correct formatting of contact information.
             if keyword in keywords:
                 if keywords[keyword].language_dependent and pxpyfactory.validation.valid_value(language):
-                    keywords[keyword].set_value(value, language=language) # Add value and language to the keyword instance
+                    keywords[keyword].set_value(value, language=language, value_none_to_empty_string=True) # Add value and language to the keyword instance
                 else:
-                    keywords[keyword].set_value(value) # Add value to the keyword instance without language
+                    keywords[keyword].set_value(value, value_none_to_empty_string=True) # Add value to the keyword instance without language
             else:
                 pxpyfactory.helpers.print_filter(f"WARNING: Keyword '{keyword}' from spesific metadata not found in metadata base. This keyword will be ignored.", 1)
 

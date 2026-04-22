@@ -143,9 +143,6 @@ class Keyword:
     # This function is used to update the scope (name and value) for the given language of the keyword if the provided column matches the scope (or a part of the scope).
     # It is used ut update interconnected keywords.
     def update_columns(self, column=None, value=None, language=None):
-        # Next line is just to be able to stop at this ponint when debugging.
-        if self.name in ['TIMEVAL'] and column in ['STAT_VAR', 'AAR_KVARTAL']: # and language == 'en':
-            pass
         for scope_ref in self.scope_refs:
             scope_ref.update_translation(from_value=column, to_value=value, language=language)
 
@@ -190,7 +187,7 @@ class Keyword:
             matched_scope.set_name(scope_name=scope_name, language=language, append=False)
 
     # _____________________________________________________________________________
-    def set_value(self, value, language=None, scope_name=None, append=None, set_as_default_value=False):
+    def set_value(self, value, language=None, scope_name=None, append=None, set_as_default_value=False, value_none_to_empty_string=False):
         if not self.language_dependent:
             language = None  # Ignore language if not language-dependent
         if append is None:
@@ -208,7 +205,7 @@ class Keyword:
         #     _split_value(value, language, scope, append)
         #     return
         
-        prepared_value = self._coerce_value(value)
+        prepared_value = self._coerce_value(value, value_none_to_empty_string=value_none_to_empty_string)
 
         if set_as_default_value:
             self.default_value = prepared_value
@@ -221,13 +218,13 @@ class Keyword:
     # _____________________________________________________________________________
     # This method will coerce the input value to the correct type based on the value_type of the keyword.
     # It has special handling for boolean values, allowing for common string representations of true and false.
-    def _coerce_value(self, input_value):
+    def _coerce_value(self, input_value, value_none_to_empty_string=False):
         if input_value is None:
-            return None
+            return "" if value_none_to_empty_string else None
         if isinstance(input_value, float) and math.isnan(input_value):
-            return None
+            return "" if value_none_to_empty_string else None
         if isinstance(input_value, (list, tuple)):
-            return [self._coerce_value(item) for item in input_value]
+            return [self._coerce_value(item, value_none_to_empty_string=value_none_to_empty_string) for item in input_value]
         value_type = self.value_type
         try:
             if value_type is bool:
@@ -300,6 +297,10 @@ class Keyword:
             target_languages = list(languages)
 
         lines = []
+
+        # Next line is just to be able to stop at this ponint when debugging.
+        if self.name in ['NOTEX']: # and column in ['STAT_VAR', 'AAR_KVARTAL']: # and language == 'en':
+            pass
 
         scope_refs_to_use = self.scope_refs.copy()
         if len(scope_refs_to_use) > 0:
