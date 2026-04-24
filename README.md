@@ -71,6 +71,47 @@ import pxpyfactory.file_io_gcs as _backend
 	- `<input-bucket>/stats/*.csv`
 	- `<input-bucket>/stats/*_meta.csv`
 
+## Kolonnevalg fra _meta (CS)
+
+Valg av `DATA`, `STUB`, `HEADING` og `TIMEVAL` hentes nå primært fra tabellspesifikk metadata i `*_meta.csv` (ikke fra kolonnefeltene i Excel-arket for dataprodukter).
+
+I `*_meta.csv` brukes rader med `TYPE=CS` og kolonnene:
+
+- `KEYWORD` (`DATA`, `STUB`, `HEADING`, `TIMEVAL`)
+- `VALUE` (kommaseparert liste)
+
+Eksempel:
+
+```csv
+TYPE,KEYWORD,VALUE
+CS,DATA,"ANTALL#0#personer,PROSENT#1#%"
+CS,STUB,KJONN
+CS,HEADING,"ALDER,TID"
+CS,TIMEVAL,TID
+```
+
+Format for `DATA`-verdi:
+
+- Del 1: kolonnenavn
+- Del 2 (valgfri): precision
+- Del 3 (valgfri): unit
+
+Delimiter er `#`, altså `KOLONNE#PRECISION#UNIT`.
+
+Eksempel:
+
+- `ANTALL#0#personer` gir:
+- `data_list`: `ANTALL`
+- `data_precision_list`: `0`
+- `data_units_list`: `personer`
+
+Fallback-regler:
+
+- Hvis `DATA` mangler i `CS`, velges datakolonne(r) automatisk basert på antall unike verdier.
+- Hvis `STUB` mangler i `CS`, velges første tilgjengelige ikke-data-kolonne.
+- Hvis `HEADING` mangler i `CS`, brukes resterende kolonner som `HEADING`.
+- Hvis antall precision/enheter ikke matcher antall data-kolonner, fylles resterende med `None`.
+
 ## Kjøring fra terminal
 
 Eksempler under er for PowerShell på Windows.
