@@ -32,7 +32,7 @@ def prepare_data_products(common_meta_filepath):
     data_products = data_products[~duplicates_mask].copy()
 
     pxpyfactory.helpers.print_filter('Data products / tables to create px-files from:', 0)
-    pxpyfactory.helpers.print_filter(data_products[['SUBJECT-CODE', 'SUBJECT-AREA', 'SUBJECT', 'TABLEID', 'TITLE', 'STUB', 'HEADING', 'DATA', 'UNITS', 'TIMEVAL']], 0)
+    pxpyfactory.helpers.print_filter(data_products[['SUBJECT-CODE', 'SUBJECT-AREA', 'SUBJECT', 'TABLEID', 'TITLE']], 0)
     if duplicates_df.shape[0] > 0:
         pxpyfactory.helpers.print_filter('--- Duplicated table numbers (will be skipped):', 0)
         pxpyfactory.helpers.print_filter(duplicates_df, 0)

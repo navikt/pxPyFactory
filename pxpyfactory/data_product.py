@@ -23,13 +23,13 @@ class PXDataProduct:
         self.subject_code        = dp_row['SUBJECT-CODE'] if pxpyfactory.validation.valid_value(dp_row['SUBJECT-CODE']) else dp_row['SUBJECT-AREA']  
         self.subject_area        = dp_row['SUBJECT-AREA'] # todo: update to show the name of the subject area
 
-        self.stub_list           = pxpyfactory.helpers.prep_list_from_string(dp_row['STUB'])
-        self.heading_list        = pxpyfactory.helpers.prep_list_from_string(dp_row['HEADING'])
-        self.data_list           = pxpyfactory.helpers.prep_list_from_string(dp_row['DATA'])
+        self.stub_list           = [] # pxpyfactory.helpers.prep_list_from_string(dp_row['STUB'])
+        self.heading_list        = [] # pxpyfactory.helpers.prep_list_from_string(dp_row['HEADING'])
+        self.data_list           = [] # pxpyfactory.helpers.prep_list_from_string(dp_row['DATA'])
         # self.data_list_pure      = pxpyfactory.helpers.prep_list_from_string(dp_row['DATA'], to_upper=False) # keep formatting of data columns since they are used as values
-        self.data_precision_list = pxpyfactory.helpers.prep_list_from_string(dp_row['DATA'], split_part=1) # get precision part only
-        self.units_list          = pxpyfactory.helpers.prep_list_from_string(dp_row['UNITS'])
-        self.timeval_list        = pxpyfactory.helpers.prep_list_from_string(dp_row['TIMEVAL'])
+        self.data_precision_list = [] # pxpyfactory.helpers.prep_list_from_string(dp_row['DATA'], split_part=1) # get precision part only
+        self.data_units_list     = [] # pxpyfactory.helpers.prep_list_from_string(dp_row['UNITS'])
+        self.timeval_list        = [] # pxpyfactory.helpers.prep_list_from_string(dp_row['TIMEVAL'])
 
         self.contents_var        = dp_row['CONTENTS']
         self.contvariable        = 'STAT_VAR' # data_list[0] # Column name for contents variable - can probably be anything..
@@ -61,16 +61,16 @@ class PXDataProduct:
             return False
         
         table_data = pxpyfactory.file_io.file_read(self.table_path) # Fetch data table from .parquet or .csv file
-        table_data, self.stub_list, self.heading_list, self.data_list = self._prepare_columns(table_data, self.stub_list, self.heading_list, self.data_list) 
+        table_meta = pxpyfactory.file_io.file_read(self.table_meta_path) # Read spesific metadata from .csv-file if it exists
+        table_meta_cs, table_meta_px, table_meta_cr, self.table_meta_sq = self._extract_table_metadata(table_meta) # Extract spesific metadata from table_meta
+
+        table_data, self.stub_list, self.heading_list, self.data_list, self.data_precision_list, self.data_units_list, self.timeval_list = self._prepare_columns(table_data, table_meta_cs) 
 
         # Get unique values for each column in the data table to be able to create all combinations of stub and heading values later.
         self.values_dict = self._create_values_dict(table_data, self.data_list) 
 
         # Update keyword instances with spesific metadata for this data product.
         keywords = self._set_keywords_base_for_data_product() # OBS # This function uses a lot of self variables.
-
-        table_meta = pxpyfactory.file_io.file_read(self.table_meta_path) # Read spesific metadata from .csv-file if it exists
-        table_meta_px, self.table_meta_sq, table_meta_cr = self._extract_table_metadata(table_meta) # Extract spesific metadata from table_meta
 
         # Update keyword values from spesific metadata for this data product
         keywords = self._update_standalone_keywords(keywords, table_meta_px)
@@ -111,10 +111,40 @@ class PXDataProduct:
     # If data_list is empty, first select column(s) for data_list based on number of unique values in them.
     # Then select stub_list and heading_list based on remaining columns.
     # TIMEVAL can also be found and set (probably based on column name=TIMEVAL or TIME) if it is empty, but this funktionality is not implemented yet.
-    def _prepare_columns(self, table_data, stub_list, heading_list, data_list):
-        remaining_columns = table_data.columns.tolist()
+    def _prepare_columns(self, table_data, table_meta_cs):
+        remaining_columns = table_data.columns.tolist().copy()
         pxpyfactory.helpers.print_filter(f"  All columns in table: {remaining_columns}", 2)
 
+        
+        def _get_columns_from_meta(cs_df, column_type, split_part=None, keep_case=False):
+            columns = []
+            if not isinstance(cs_df, pd.DataFrame) or not {'KEYWORD', 'VALUE'}.issubset(cs_df.columns):
+                return columns
+            if (cs_df['KEYWORD'] == column_type).any():
+                column_str = cs_df.loc[cs_df['KEYWORD'] == column_type, 'VALUE'].iloc[0]
+                for col in column_str.split(','):
+                    if split_part is not None:
+                        col = col.split('#')
+                        if len(col) > split_part:
+                            col = col[split_part]
+                        else:
+                            col = None
+                    if col is not None:
+                        col = col.strip()
+                        if col.upper() in remaining_columns or split_part not in [None, 0]:
+                            if not keep_case:
+                                col = col.upper()
+                            columns.append(col)
+            return columns
+        
+        # Data precision can be set in metadata as a part of the DATA keyword value, separated by #.
+        # For example: "VALUE=SALES#2" would set data column to SALES and data precision to 2.
+        # This is implemented to be able to set data precision for each data column separately if needed.
+        data_precision_list = _get_columns_from_meta(table_meta_cs, 'DATA', 1)
+        data_units_list = _get_columns_from_meta(table_meta_cs, 'DATA', 2, keep_case=True) # Get units part of the DATA keyword value if it exists. Units can be set for each data column separately if needed.
+        timeval_list = _get_columns_from_meta(table_meta_cs, 'TIMEVAL')
+
+        data_list = _get_columns_from_meta(table_meta_cs, 'DATA', 0) # Update data_list based on content in spesific metadata if it exists
         pxpyfactory.helpers.print_filter(f"  Initial data_list: {data_list}", 2)
         if pxpyfactory.validation.is_list_empty(data_list):
             uniqe_values_in_columns = {}
@@ -134,7 +164,16 @@ class PXDataProduct:
                 if column in remaining_columns:
                     remaining_columns.remove(column)
         pxpyfactory.helpers.print_filter(f"  Updated data_list: {data_list}", 2)
+        
+        # If there are more data columns than precision values, the remaining data columns will have None as data precision.
+        if len(data_precision_list) != len(data_list):
+            data_precision_list = [None] * len(data_list)
+        pxpyfactory.helpers.print_filter(f"  Updated data_precision_list: {data_precision_list}", 2)
+        if len(data_units_list) != len(data_list):
+            data_units_list = [None] * len(data_list)
+        pxpyfactory.helpers.print_filter(f"  Updated data_units_list: {data_units_list}", 2)
 
+        stub_list = _get_columns_from_meta(table_meta_cs, 'STUB') # Update stub_list based on content in spesific metadata if it exists
         pxpyfactory.helpers.print_filter(f"  Initial stub_list: {stub_list}", 2)
         if pxpyfactory.validation.is_list_empty(stub_list):
             for column in remaining_columns:
@@ -148,6 +187,7 @@ class PXDataProduct:
                     remaining_columns.remove(column)
         pxpyfactory.helpers.print_filter(f"  Updated stub_list: {stub_list}", 2)
 
+        heading_list = _get_columns_from_meta(table_meta_cs, 'HEADING') # Update heading_list based on content in spesific metadata if it exists
         pxpyfactory.helpers.print_filter(f"  Initial heading_list: {heading_list}", 2)
         if pxpyfactory.validation.is_list_empty(heading_list):
             heading_list = []
@@ -157,6 +197,12 @@ class PXDataProduct:
                 heading_list.append(column)
         pxpyfactory.helpers.print_filter(f"  Updated heading_list: {heading_list}", 2)
 
+        timeval_must_be_in_headings_or_stubs = stub_list + heading_list
+        for timeval_col in timeval_list:
+            if timeval_col not in timeval_must_be_in_headings_or_stubs:
+                pxpyfactory.helpers.print_filter(f"WARNING: TIMEVAL column '{timeval_col}' is not included in DATA columns. This column will not be treated as a time variable.", 1)
+                timeval_list = []
+        
         # Ensure correct formatting of content
         for column in table_data.columns:
             if column in data_list:
@@ -167,7 +213,7 @@ class PXDataProduct:
                 # Ensure all values in non-data columns are strings (to avoid issues with mixed types):
                 table_data[column] = table_data[column].apply(lambda x: str(x) if pd.notnull(x) else '')
 
-        return table_data, stub_list, heading_list, data_list
+        return table_data, stub_list, heading_list, data_list, data_precision_list, data_units_list, timeval_list
 
     # _____________________________________________________________________________
     def _create_values_dict(self, table_data, data_list):
@@ -252,10 +298,11 @@ class PXDataProduct:
         table_meta['KEYWORD']   = table_meta['KEYWORD'].astype(str).str.upper()  # uppercase
         table_meta['LANGUAGE']  = table_meta['LANGUAGE'].astype(str).str.lower() # lowercase
         
+        table_meta_cs      = table_meta[table_meta['TYPE'] == 'CS'][['KEYWORD', 'VALUE']]      # create df with only cs parameters
         table_meta_px      = table_meta[table_meta['TYPE'] == 'PX'][['KEYWORD', 'LANGUAGE', 'VALUE']]      # create df with only px parameters
-        table_meta_sq      = table_meta[table_meta['TYPE'] == 'SQ'][['KEYWORD', 'LANGUAGE', 'VALUE']]      # create df with only sq parameters
         table_meta_cr      = table_meta[table_meta['TYPE'] == 'CR'][['KEYWORD', 'LANGUAGE', 'VALUE']]      # create df with only cr parameters
-        return table_meta_px, table_meta_sq, table_meta_cr
+        table_meta_sq      = table_meta[table_meta['TYPE'] == 'SQ'][['KEYWORD', 'VALUE']]      # create df with only sq parameters
+        return table_meta_cs, table_meta_px, table_meta_cr, table_meta_sq
         
 
 
@@ -329,12 +376,12 @@ class PXDataProduct:
             keywords['CONTACT'].set_value(None, scope_name=data_col, language=language_initial)
 
             # If there is more data columns than units, use the first unit for the rest
-            if self.units_list == []:
+            if self.data_units_list == []:
                 units_value = ''
-            elif index < len(self.units_list):
-                units_value = self.units_list[index]
+            elif index < len(self.data_units_list):
+                units_value = self.data_units_list[index]
             else:
-                units_value = self.units_list[0]
+                units_value = self.data_units_list[0]
 
             keywords['UNITS'].set_value(units_value, scope_name=data_col, language=language_initial)
 
