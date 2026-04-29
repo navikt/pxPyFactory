@@ -173,6 +173,11 @@ class PXDataProduct:
             data_units_list = [None] * len(data_list)
         pxpyfactory.helpers.print_filter(f"  Updated data_units_list: {data_units_list}", 2)
 
+        heading_list = _get_columns_from_meta(table_meta_cs, 'HEADING') # Update heading_list based on content in spesific metadata if it exists
+        pxpyfactory.helpers.print_filter(f"  Initial heading_list: {heading_list}", 2)
+        if pxpyfactory.validation.is_list_empty(heading_list):
+            heading_list = []
+
         stub_list = _get_columns_from_meta(table_meta_cs, 'STUB') # Update stub_list based on content in spesific metadata if it exists
         pxpyfactory.helpers.print_filter(f"  Initial stub_list: {stub_list}", 2)
         if pxpyfactory.validation.is_list_empty(stub_list):
@@ -187,11 +192,7 @@ class PXDataProduct:
                     remaining_columns.remove(column)
         pxpyfactory.helpers.print_filter(f"  Updated stub_list: {stub_list}", 2)
 
-        heading_list = _get_columns_from_meta(table_meta_cs, 'HEADING') # Update heading_list based on content in spesific metadata if it exists
-        pxpyfactory.helpers.print_filter(f"  Initial heading_list: {heading_list}", 2)
-        if pxpyfactory.validation.is_list_empty(heading_list):
-            heading_list = []
-        # Add all remaining columns must be headings:
+        # Add all remaining columns as headings:
         for column in remaining_columns:
             if column not in heading_list:
                 heading_list.append(column)
@@ -201,7 +202,7 @@ class PXDataProduct:
         for timeval_col in timeval_list:
             if timeval_col not in timeval_must_be_in_headings_or_stubs:
                 pxpyfactory.helpers.print_filter(f"WARNING: TIMEVAL column '{timeval_col}' is not included in DATA columns. This column will not be treated as a time variable.", 1)
-                timeval_list = []
+                timeval_list.remove(timeval_col)
         
         # Ensure correct formatting of content
         for column in table_data.columns:
@@ -233,15 +234,30 @@ class PXDataProduct:
     def _update_standalone_keywords(self, keywords, table_meta_px):
         for _, row in table_meta_px.iterrows():
             keyword = row['KEYWORD']
+            scope_name = None
             language = row['LANGUAGE']
             value = row['VALUE']
             if keyword == 'CONTACT':
                 value = pxpyfactory.keyword_contact.shape_to_px(value) # Ensure correct formatting of contact information.
+            if keyword.startswith('REFPERIOD'):
+                pass
+ 
+            # Check if keyword has a scope in parentheses, for example "VALUES(COLUMN1)". If it does, extract the keyword and scope name.
+            keyword_with_scope = re.fullmatch(r'([^()]+)\(([^()]+)\)', keyword)
+            if keyword_with_scope:
+                keyword = keyword_with_scope.group(1).strip()
+                scope_name = keyword_with_scope.group(2).strip()
+                # if (
+                #     (scope_name.startswith('"') and scope_name.endswith('"'))
+                #     or (scope_name.startswith("'") and scope_name.endswith("'"))
+                # ):
+                #     scope_name = scope_name[1:-1].strip()
+
             if keyword in keywords:
                 if keywords[keyword].language_dependent and pxpyfactory.validation.valid_value(language):
-                    keywords[keyword].set_value(value, language=language, value_none_to_empty_string=True) # Add value and language to the keyword instance
+                    keywords[keyword].set_value(value, language=language, scope_name=scope_name, value_none_to_empty_string=True) # Add value and language to the keyword instance
                 else:
-                    keywords[keyword].set_value(value, value_none_to_empty_string=True) # Add value to the keyword instance without language
+                    keywords[keyword].set_value(value, scope_name=scope_name, value_none_to_empty_string=True) # Add value to the keyword instance without language
             else:
                 pxpyfactory.helpers.print_filter(f"WARNING: Keyword '{keyword}' from spesific metadata not found in metadata base. This keyword will be ignored.", 1)
 
@@ -267,15 +283,19 @@ class PXDataProduct:
             # List of keywords that have interconnected values that need to be updated together
             # These keywords are interconnected because they all refer to the same column names and values in the data table,
             #   and changes in one of them should be reflected in the others to maintain consistency.
-            # For example, if a column name is renamed, it should be updated in all these keywords
+            # For example, if a column name is renamed, it should be updated in all keywords using it
             #   to ensure that the correct values are associated with the correct columns in the generated .px file.
-            keywords_interconnected = ['STUB', 'HEADING', 'CONTVARIABLE', 'VALUES', 'TIMEVAL', 'UNITS', 'PRECISION', 'LAST-UPDATED', 'CONTACT']
+            # The name/scope is the refrence to a column, and in the px-file this is typed in as the word in parentheses after the keyword, for example "VALUES(COLUMN1)". The value is the actual name of the column that should be used in the .px file, for example "SALES". If COLUMN1 is renamed to COLUMN_A in the data table, then the value should also be updated to SALES_A to maintain the connection between the column name and the values in the .px file.
+            # It is safe to update all names/scopes in all keywords, but values is more riscy, and should only be done on spesific keywords.
+            for keyword in keywords:
+                keywords[keyword].update_columns(column=column, value=value, language=language, target="name") # target can be None, "name" or "value" 
 
-            for keyword in keywords_interconnected:
+            keywords_value_update = ['STUB', 'HEADING', 'CONTVARIABLE', 'VALUES', 'UNITS'] # , 'TIMEVAL', 'PRECISION', 'LAST-UPDATED', 'CONTACT'
+            for keyword in keywords_value_update:
                 if keywords[keyword] is None:
-                    pxpyfactory.helpers.print_filter(f"WARNING: Keyword '{keyword}' is missing.", 1)
+                    pxpyfactory.helpers.print_filter(f"WARNING: Keyword '{keyword}' is missing.", 1)  
                     continue
-                keywords[keyword].update_columns(column=column, value=value, language=language)
+                keywords[keyword].update_columns(column=column, value=value, language=language, target="value")
 
         return keywords
 
@@ -397,6 +417,7 @@ class PXDataProduct:
             # keywords['CFPRICES'].set_value(value, scope_name=data_col, language=language_initial)
             # keywords['DAYADJ'].set_value(value, scope_name=data_col, language=language_initial)
             # keywords['SEASADJ'].set_value(value, scope_name=data_col, language=language_initial)
+            # keywords['REFPERIOD'].set_value(value, scope_name=data_col, language=language_initial)
 
         return keywords
 

@@ -59,33 +59,30 @@ class MultilingualValueScope:
     def get_value(self, language=None, strictly_enforce_language=True, allow_empty_return_value=True):
         return self.value.get(language=language, strictly_enforce_language=strictly_enforce_language)
 
-    def update_translation(self, from_value, to_value, language=None):
-        if language is None:
-            # if language is None, we want to check all languages for both name and value except 'raw', and update all languages where the from_value is found
-            name_languages_to_check = {lang for lang in self.name._values.keys() if lang != 'raw'}
-            name_languages_to_check.add(None)
-            value_languages_to_check = {lang for lang in self.value._values.keys() if lang != 'raw'}
-            value_languages_to_check.add(None)
+    def update_translation(self, from_value, to_value, language=None, target='value'):
+        if target == 'name':
+            store = self.name._values
+            getter = self.get_name
         else:
-            name_languages_to_check = [language]
-            value_languages_to_check = [language]
+            store = self.value._values
+            getter = self.get_value
 
-        for language in name_languages_to_check:
-            for get_language in [language, None, 'raw']:
-                current_name = self.get_name(language=get_language)
-                if current_name is not None:
-                    updated_name = self._replace_in_value(current_name, from_value, to_value)
-                    if updated_name != current_name:
-                        self.set_name(scope_name=updated_name, language=language)
-                    break
+        if language is None:
+            languages_to_check = {lang for lang in store.keys() if lang != 'raw'}
+            languages_to_check.add(None)
+        else:
+            languages_to_check = [language]
 
-        for language in value_languages_to_check:
-            for get_language in [language, None, 'raw']:
-                current_value = self.get_value(language=get_language)
-                if current_value is not None:
-                    updated_value = self._replace_in_value(current_value, from_value, to_value)
-                    if updated_value != current_value:
-                        self.set_value(value=updated_value, language=language)
+        for current_language in languages_to_check:
+            for get_language in [current_language, None, 'raw']:
+                current = getter(language=get_language)
+                if current is not None:
+                    updated = self._replace_in_value(current, from_value, to_value)
+                    if updated != current:
+                        if target == 'name':
+                            self.set_name(scope_name=updated, language=current_language)
+                        else:
+                            self.set_value(value=updated, language=current_language)
                     break
 
     def _replace_in_value(self, value, from_value, to_value):
@@ -94,10 +91,17 @@ class MultilingualValueScope:
             for v in value:
                 if v == from_value:
                     updated_list.append(to_value)
+                # If both value and from_value are strings, we can also check for case-insensitive match and replace if they match, to allow for more flexible translation updates.
+                elif isinstance(v, str) and isinstance(from_value, str) and v.lower() == from_value.lower():
+                    updated_list.append(to_value)
                 else:
                     updated_list.append(v)
             return updated_list
         elif value == from_value:
             return to_value
+        # If both value and from_value are strings, we can also check for case-insensitive match and replace if they match, to allow for more flexible translation updates.
+        elif isinstance(value, str) and isinstance(from_value, str) and value.lower() == from_value.lower():
+            return to_value
         return value
 
+    

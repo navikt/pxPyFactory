@@ -142,9 +142,12 @@ class Keyword:
     # _____________________________________________________________________________
     # This function is used to update the scope (name and value) for the given language of the keyword if the provided column matches the scope (or a part of the scope).
     # It is used ut update interconnected keywords.
-    def update_columns(self, column=None, value=None, language=None):
+    def update_columns(self, column=None, value=None, language=None, target=None):
         for scope_ref in self.scope_refs:
-            scope_ref.update_translation(from_value=column, to_value=value, language=language)
+            if target is None or target == 'name':
+                scope_ref.update_translation(from_value=column, to_value=value, language=language, target='name')
+            if target is None or target == 'value':
+                scope_ref.update_translation(from_value=column, to_value=value, language=language, target='value')
 
     # _____________________________________________________________________________
     # Return the scope or scopes that match the input scope.
@@ -299,7 +302,7 @@ class Keyword:
         lines = []
 
         # Next line is just to be able to stop at this ponint when debugging.
-        if self.name in ['NOTEX']: # and column in ['STAT_VAR', 'AAR_KVARTAL']: # and language == 'en':
+        if self.name in ['REFPERIOD']: # and column in ['STAT_VAR', 'AAR_KVARTAL']: # and language == 'en':
             pass
 
         scope_refs_to_use = self.scope_refs.copy()
