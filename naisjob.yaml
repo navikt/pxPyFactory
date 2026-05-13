@@ -20,6 +20,10 @@ spec:
   gcp:
     buckets:
       # Input bucket - input and workfiles to pxPyFactory are stored here
+      - name: pxpyfactory-dvh
+        # No lifecycle rules - keep files indefinitely for API to serve
+      
+      # Input bucket - input and workfiles to pxPyFactory are stored here
       - name: pxpyfactory-input
         # No lifecycle rules - keep files indefinitely for API to serve
       
