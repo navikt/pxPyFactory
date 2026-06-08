@@ -8,6 +8,7 @@ import pxpyfactory.saved_query
 import pxpyfactory.helpers
 import pxpyfactory.validation
 import pxpyfactory.keyword_contact
+import pxpyfactory.multilingual_column_value
 
 
 class PXDataProduct:
@@ -20,7 +21,7 @@ class PXDataProduct:
         self.tableid             = '' + dp_row['TABLEID'] # Nav uses NAV_ as a prefix for table numbers
         self.tableid_raw         = dp_row['TABLEID_RAW'] # Table ref from input/excel before shortening
         self.table_name          = dp_row['TITLE']
-        self.subject_code        = dp_row['SUBJECT-CODE'] if pxpyfactory.validation.valid_value(dp_row['SUBJECT-CODE']) else dp_row['SUBJECT-AREA']  
+        self.subject_code        = dp_row['SUBJECT-CODE'].upper() if pxpyfactory.validation.valid_value(dp_row['SUBJECT-CODE']) else dp_row['SUBJECT-AREA'].upper()  
         self.subject_area        = dp_row['SUBJECT-AREA'] # todo: update to show the name of the subject area
 
         self.stub_list           = [] # pxpyfactory.helpers.prep_list_from_string(dp_row['STUB'])
@@ -47,6 +48,7 @@ class PXDataProduct:
         # self.table_meta_px       = pd.DataFrame() # DataFrame with px parameters from spesific metadata file
         self.table_meta_sq       = pd.DataFrame() # DataFrame with sq parameters from spesific metadata file (this is used in the SavedQueryGenerator)
         self.values_dict         = {} # Dictionary with unique values for each column in the data table (this is also used in the SavedQueryGenerator)
+        self.language_values_dict   = {} # Dictionary with unique values per logical column and language
 
         self.list_of_lines       = [] # Final list of lines to be written to .px file
 
@@ -61,6 +63,9 @@ class PXDataProduct:
             return False
         
         table_data = pxpyfactory.file_io.file_read(self.table_path) # Fetch data table from .parquet or .csv file
+        # Prepare language-specific columns and create mapping of translations for values in different languages. OBS: Use language prefrence from general settings.
+        table_data, self.language_values_dict = pxpyfactory.multilingual_column_value.MultilingualColumnValue.prepare_language_columns(table_data, keyword_language=self.main_app.keywords_base['LANGUAGE'].get_value(), keyword_languages=self.main_app.keywords_base['LANGUAGES'].get_value())
+
         table_meta = pxpyfactory.file_io.file_read(self.table_meta_path) # Read spesific metadata from .csv-file if it exists
         table_meta_cs, table_meta_px, table_meta_cr, self.table_meta_sq = self._extract_table_metadata(table_meta) # Extract spesific metadata from table_meta
 
@@ -239,19 +244,17 @@ class PXDataProduct:
             value = row['VALUE']
             if keyword == 'CONTACT':
                 value = pxpyfactory.keyword_contact.shape_to_px(value) # Ensure correct formatting of contact information.
-            if keyword.startswith('REFPERIOD'):
-                pass
  
             # Check if keyword has a scope in parentheses, for example "VALUES(COLUMN1)". If it does, extract the keyword and scope name.
             keyword_with_scope = re.fullmatch(r'([^()]+)\(([^()]+)\)', keyword)
             if keyword_with_scope:
                 keyword = keyword_with_scope.group(1).strip()
                 scope_name = keyword_with_scope.group(2).strip()
-                # if (
-                #     (scope_name.startswith('"') and scope_name.endswith('"'))
-                #     or (scope_name.startswith("'") and scope_name.endswith("'"))
-                # ):
-                #     scope_name = scope_name[1:-1].strip()
+                if (
+                    (scope_name.startswith('"') and scope_name.endswith('"'))
+                    or (scope_name.startswith("'") and scope_name.endswith("'"))
+                ):
+                    scope_name = scope_name[1:-1].strip()
 
             if keyword in keywords:
                 if keywords[keyword].language_dependent and pxpyfactory.validation.valid_value(language):
@@ -351,7 +354,13 @@ class PXDataProduct:
         keywords['VALUES'].set_value(self.data_list, scope_name=self.contvariable, language=language_initial) 
 
         for key, value in self.values_dict.items():
-            keywords['VALUES'].set_value(value, scope_name=key, language=language_initial)
+            language_values = self.language_values_dict.get(key, {})
+            
+            for language, value_list in language_values.items():
+                keywords['VALUES'].set_value(value_list, scope_name=key, language=language)
+                # keywords['VALUES'].set_value(default_values, scope_name=key, language=None)
+
+
             if key in self.timeval_list:
                 tlist_id = None
                 check_value = value[0]

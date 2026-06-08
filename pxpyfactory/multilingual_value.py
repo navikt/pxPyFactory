@@ -40,6 +40,12 @@ class MultilingualValue:
         return None
     
 
+# class MultilingualValueColumn:
+#     def __init__(self, scope_name=None):
+#         self.name = MultilingualValue()
+#         self.value = MultilingualValue()
+#         self.set_name(scope_name=scope_name, language='raw')
+
 class MultilingualValueScope:
     def __init__(self, scope_name=None):
         self.name = MultilingualValue()
