@@ -228,7 +228,7 @@ class PXDataProduct:
         for column in table_data.columns:
             if column not in data_list:
             # Store unique values in column for use in VALUES-keywords:
-                values_dict[column] = sorted(pd.unique(table_data[column]))
+                values_dict[column] = list(pd.unique(table_data[column]))
         return values_dict
     
 
@@ -458,8 +458,28 @@ class PXDataProduct:
         expanded_table_data = pd.merge(all_combinations_of_stub_heading, table_data, on=stub_and_headings, how='left').fillna(fill_value)
         pxpyfactory.helpers.print_filter(expanded_table_data, 3)
 
-        data_pivot = expanded_table_data.pivot_table(index=stub_list, columns=heading_list, values=data_list, aggfunc='first')
-        data_lines = [' '.join(map(str, row)) for row in data_pivot.values] # Convert each row to a space-separated string
+        # Keep only the first observation per axis combination (same behavior as aggfunc='first').
+        expanded_table_data = expanded_table_data.drop_duplicates(subset=stub_and_headings, keep='first')
+
+        value_lookup = {}
+        for _, row in expanded_table_data.iterrows():
+            key = tuple(row[axis] for axis in stub_and_headings)
+            value_lookup[key] = {data_col: row[data_col] for data_col in data_list}
+
+        stub_combinations = list(product(*[values_dict[axis] for axis in stub_list]))
+        heading_combinations = list(product(*[values_dict[axis] for axis in heading_list]))
+        if not heading_combinations:
+            heading_combinations = [tuple()]
+
+        data_lines = []
+        for stub_combination in stub_combinations:
+            row_values = []
+            for data_col in data_list:
+                for heading_combination in heading_combinations:
+                    key = tuple(stub_combination) + tuple(heading_combination)
+                    value = value_lookup.get(key, {}).get(data_col, fill_value)
+                    row_values.append(str(value))
+            data_lines.append(' '.join(row_values))
 
         return data_lines
     
