@@ -152,18 +152,26 @@ class PXDataProduct:
         data_list = _get_columns_from_meta(table_meta_cs, 'DATA', 0) # Update data_list based on content in spesific metadata if it exists
         pxpyfactory.helpers.print_filter(f"  Initial data_list: {data_list}", 2)
         if pxpyfactory.validation.is_list_empty(data_list):
-            uniqe_values_in_columns = {}
-            for column in remaining_columns:
-                uniqe_values_in_columns[column] = len(pd.unique(table_data[column]))
-            # find column with most unique values and set as data column
-            data_column = max(uniqe_values_in_columns, key=uniqe_values_in_columns.get)
+            def _find_best_data_column(remaining_columns):
+                # Try to find hint in column names to identify data column.
+                for name_hint in ['PX_DATA', 'DATA', 'VALUE', 'VERDI', 'ANTALL', 'COUNT', 'RATE', 'AMOUNT']:
+                    for column in remaining_columns:
+                        if name_hint in column.upper():
+                            return column
+                # Try to find column with most unique values and set as data column.  
+                unique_values_in_columns = {}
+                for column in remaining_columns:
+                    unique_values_in_columns[column] = len(pd.unique(table_data[column]))
+                matched_column = max(unique_values_in_columns, key=unique_values_in_columns.get)
+                # for key, value in unique_values_in_columns.items():
+                #     if (key in remaining_columns) and (value > 1000):
+                #         data_list.append(key)
+                #         remaining_columns.remove(key)
+                return matched_column
+
+            data_column = _find_best_data_column(remaining_columns)
             data_list = [data_column]
             remaining_columns.remove(data_column)
-            for key, value in uniqe_values_in_columns.items():
-                if (key in remaining_columns) and (value > 1000):
-                    data_list.append(key)
-                    remaining_columns.remove(key)
-            # self.data_list_pure = data_list
         else:
             for column in data_list:
                 if column in remaining_columns:
