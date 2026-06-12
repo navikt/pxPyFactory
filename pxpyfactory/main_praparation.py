@@ -6,12 +6,59 @@ import pxpyfactory.validation
 
 
 # Get and prepare data products for PX file generation from Excel sheet.
-def prepare_data_products(common_meta_filepath):
-    data_products = pxpyfactory.file_io.file_read(common_meta_filepath, sheet_name='dataprodukter')
-    data_products = data_products.map(lambda x: str(x) if pd.notnull(x) else None)
+def prepare_data_products(common_meta_filepath, input_path):
+    source_arg = pxpyfactory.helpers.get_input_args('source')
+    if (source_arg is None) or (source_arg == 'excel'):
+        data_products = pxpyfactory.file_io.file_read(common_meta_filepath, sheet_name='dataprodukter')
+        # Remove data products where BUILD is not set to 'x' in Excel sheet
+        if ('TABLEID' in data_products.columns) and ('BUILD' in data_products.columns):
+            # If there is a TABLEID with value '*' and BUILD value 'x', it means that all files in input-folder should be added as data products.
+            if ((data_products['TABLEID'].astype(str).str.strip() == '*') & (data_products['BUILD'].astype(str).str.strip().str.lower() == 'x')).any():
+                pxpyfactory.helpers.print_filter("Found TABLEID with value '*'. All files in input-folder will be added.", 1)
+                data_products = data_products[data_products['TABLEID'] != '*']
+                source_arg = 'folder'
+            data_products = data_products[pxpyfactory.helpers.validvalue(data_products['TABLEID']) & (data_products['BUILD'].astype(str).str.strip().str.lower() == 'x')]
+        else:
+            data_products = pd.DataFrame()
+        # Remove duplicated data products in Excel sheet
+        duplicates_mask = data_products.duplicated(subset=['TABLEID'], keep='first')
+        print(" Duplicates mask:")
+        print(duplicates_mask)
+        duplicates_df = data_products[duplicates_mask].copy()
+        if not duplicates_df.empty:
+            data_products = data_products[~duplicates_mask].copy()
+            pxpyfactory.helpers.print_filter('--- Duplicated table numbers (will be skipped):', 0)
+            pxpyfactory.helpers.print_filter(duplicates_df, 0)
+    else:
+        data_products = pd.DataFrame()
 
-    data_products['TABLEID_RAW'] = data_products['TABLEID']
-    data_products['TABLEID'] = data_products['TABLEID'].apply(pxpyfactory.helpers.shorten_tableid)
+    # add missing columns if not present in Excel sheet to avoid errors later (will be filled with None values)
+    expected_columns = ['BUILD', 'TABLEID', 'SUBJECT-CODE', 'SUBJECT-AREA', 'SUBJECT', 'TITLE', 'CONTENTS']
+    for column in expected_columns:
+        if column not in data_products.columns:
+            data_products[column] = None
+    data_products = data_products.map(lambda x: str(x) if pd.notnull(x) else None)  # Convert all cell-values to string, set None for NaN
+
+
+    add_all_files_in_folder = False
+    if source_arg == 'folder':
+        pxpyfactory.helpers.print_filter(f"Source argument set to 'folder'. All files in input-folder will be added.", 1)
+        add_all_files_in_folder = True
+    elif data_products.empty:
+        pxpyfactory.helpers.print_filter(f"File {common_meta_filepath} with sheet 'dataprodukter' not used. All files in input-folder will be added.", 1)
+        add_all_files_in_folder = True
+
+    if add_all_files_in_folder:
+        # Implementation for adding all data product files in the folder
+        files_in_folder = pxpyfactory.file_io.list_files_in_path(input_path)
+        new_row = dict.fromkeys(data_products.columns, None)
+        for file in files_in_folder:
+            # split file str on '.'
+            file_parts = file.rsplit('.', 1)
+            if file_parts[1] in ['csv']: # , 'parquet']: # Only consider csv and parquet files as data products
+                if (file_parts[0].endswith('_meta') == False) and (file_parts[0] not in data_products['TABLEID'].values):
+                    new_row['TABLEID'] = file_parts[0]
+                    data_products.loc[len(data_products)] = new_row
 
     # Filter based on command line arguments
     force_build_arg = pxpyfactory.helpers.get_input_args('build')
@@ -23,19 +70,14 @@ def prepare_data_products(common_meta_filepath):
         data_products['FORCE_BUILD'] = False
         data_products.loc[data_products['TABLEID'] == force_build_arg, 'FORCE_BUILD'] = True
         data_products.loc[data_products['TABLEID_RAW'] == force_build_arg, 'FORCE_BUILD'] = True
+    # Remove data products where FORCE_BUILD is not True or None
+    data_products = data_products[data_products['FORCE_BUILD'] != False]
 
-    # Remove data products where BUILD is not set to 'x' in Excel sheet and FORCE_BUILD is not True or None
-    data_products = data_products[(data_products['BUILD'] == 'x') & (data_products['FORCE_BUILD'] != False)]
-
-    duplicates_mask = data_products.duplicated(subset=['TABLEID'], keep='first')
-    duplicates_df = data_products[duplicates_mask].copy()
-    data_products = data_products[~duplicates_mask].copy()
+    data_products['TABLEID_RAW'] = data_products['TABLEID']
+    data_products['TABLEID'] = data_products['TABLEID'].apply(pxpyfactory.helpers.shorten_tableid)
 
     pxpyfactory.helpers.print_filter('Data products / tables to create px-files from:', 0)
     pxpyfactory.helpers.print_filter(data_products[['SUBJECT-CODE', 'SUBJECT-AREA', 'SUBJECT', 'TABLEID', 'TITLE']], 0)
-    if duplicates_df.shape[0] > 0:
-        pxpyfactory.helpers.print_filter('--- Duplicated table numbers (will be skipped):', 0)
-        pxpyfactory.helpers.print_filter(duplicates_df, 0)
 
     return data_products
 
@@ -43,8 +85,8 @@ def prepare_data_products(common_meta_filepath):
 # Prepare alias folder names from Excel sheets - common for all data products.
 def prepare_alias(common_meta_filepath):
     alias = pxpyfactory.file_io.file_read(common_meta_filepath, sheet_name='folder-alias')
-    pxpyfactory.helpers.print_filter('Alias table:', 3)
-    pxpyfactory.helpers.print_filter(alias, 3)
+    pxpyfactory.helpers.print_filter('Alias table:', 4)
+    pxpyfactory.helpers.print_filter(alias, 4)
     alias = alias[['CODE', 'NO', 'EN']]
     alias['NO'] = alias['NO'].where(alias['NO'].apply(pxpyfactory.validation.valid_value), alias['EN'])
     alias['EN'] = alias['EN'].where(alias['EN'].apply(pxpyfactory.validation.valid_value), alias['NO'])
@@ -58,16 +100,22 @@ def prepare_alias(common_meta_filepath):
 # Create the folder structure to put the PX files in.
 def update_folder_structure(data_products_df, alias_df, output_path):
     path_list = []
-    languages = ['no', 'en']
     for _, row in data_products_df.iterrows():
-        level1_path = output_path + '/' + str(row['SUBJECT-AREA']).replace('/', '')
-        level2_path = level1_path + '/' + str(row['SUBJECT']).replace('/', '')
-
+        subject_area = row['SUBJECT-AREA']
+        if subject_area is None:
+            continue
+        level1_path = output_path + '/' + str(subject_area).replace('/', '')
         if level1_path not in path_list:
             path_list.append(level1_path)
+
+        subject = row['SUBJECT']
+        if subject is None:
+            continue
+        level2_path = level1_path + '/' + str(subject).replace('/', '')
         if level2_path not in path_list:
             path_list.append(level2_path)
 
+    languages = ['no', 'en']
     for path in path_list:
         leaf = path.rsplit('/', 1)[-1]
         for language in languages:

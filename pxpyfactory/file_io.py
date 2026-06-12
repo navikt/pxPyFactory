@@ -15,6 +15,7 @@ _write_file = _backend._write_file
 file_exists = _backend.file_exists
 get_file_info = _backend.get_file_info
 _get_folder_info = _backend._get_folder_info
+_list_files_in_path = _backend._list_files_in_path
 delete_content_in_path = _backend.delete_content_in_path
 
 # _____________________________________________________________________________
@@ -29,6 +30,10 @@ def get_path_info(in_path, ignore=None):
     if '.' in in_path:
         return get_file_info(in_path)
     return _get_folder_info(in_path, ignore=ignore)
+
+# _____________________________________________________________________________
+def list_files_in_path(in_path):
+    return _list_files_in_path(in_path)
 
 # _____________________________________________________________________________
 def file_read(file_path, sheet_name='Ark1', sep=';', header=0, clean=True):

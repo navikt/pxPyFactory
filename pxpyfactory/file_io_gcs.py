@@ -67,6 +67,24 @@ def _get_folder_info(folder_path, ignore=None):
     return total_size, latest_time
 
 # _____________________________________________________________________________
+def _list_files_in_path(folder_path):
+    if not folder_path.endswith('/'):
+        folder_path += '/'
+
+    prefix = _get_full_path(folder_path)
+    bucket = _get_bucket(folder_path)
+    blobs = bucket.list_blobs(prefix=prefix)
+
+    files = []
+    for blob in blobs:
+        if blob.name.endswith('/'):
+            continue
+        rel = blob.name[len(prefix):] if blob.name.startswith(prefix) else blob.name
+        if rel != '':
+            files.append(rel)
+    return files
+
+# _____________________________________________________________________________
 def _read_file(file_path, download_as_bytes=False):
     try:
         file_blob = _get_file_blob(file_path, with_metadata=True)

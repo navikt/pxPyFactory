@@ -51,6 +51,20 @@ def _get_folder_info(folder_path, ignore=None):
     return total_size, latest_time
 
 # _____________________________________________________________________________
+def _list_files_in_path(folder_path):
+    local_path = _get_local_path(folder_path)
+    if not os.path.isdir(local_path):
+        return []
+
+    files = []
+    for root, _, filenames in os.walk(local_path):
+        for fname in filenames:
+            fpath = os.path.join(root, fname)
+            rel = os.path.relpath(fpath, local_path).replace('\\', '/')
+            files.append(rel)
+    return files
+
+# _____________________________________________________________________________
 def _read_file(file_path, download_as_bytes=False):
     try:
         local_path = _get_local_path(file_path)

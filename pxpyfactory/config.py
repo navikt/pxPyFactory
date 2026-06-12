@@ -43,10 +43,12 @@ class GitHubConfig:
 @dataclass
 class Paths: #in_use#
     """File and directory paths"""
-    INPUT = "stats" #in_use#
+    # INPUT = "stats" #in_use#
+    INPUT = "workshop" #in_use#
     OUTPUT = "px" #in_use#
     SAVED_QUERY_OUTPUT = "sq" #in_use#
-    COMMON_METADATA_FILE = "common_meta.xlsx" #in_use#
+    # COMMON_METADATA_FILE = "common_meta.xlsx" #in_use#
+    COMMON_METADATA_FILE = "workshop/common_meta_workshop.xlsx" #in_use#
     PRODUCTION_LOG_FILE = "log/production_log.jsonl" #in_use#
 
 
@@ -155,7 +157,7 @@ class Defaults:
     HEADER_ROW = 0
     CONTVARIABLE_NAME = "STAT_VAR"
     TABLEID_MAX_LENGTH = 20
-    MAX_SQ_CELLS = 500000  # Maximum cells viewable in pxWeb2 #in_use#
+    MAX_SQ_CELLS = 150000  # Maximum cells viewable in pxWeb2 #in_use#
 
 
 @dataclass

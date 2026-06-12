@@ -56,7 +56,7 @@ class PXMain:
             pxpyfactory.helpers.print_filter(f"--- Content in input folder has not changed since last run (exit)---", 0)
             return
 
-        self.data_products_df = pxpyfactory.main_praparation.prepare_data_products(self.common_meta_filepath) # Get and prepare data products for px file generation from Excel-sheet.
+        self.data_products_df = pxpyfactory.main_praparation.prepare_data_products(self.common_meta_filepath, self.input_path) # Get and prepare data products for px file generation from Excel-sheet.
         self.keywords_base = pxpyfactory.main_praparation.prepare_keywords_base(self.common_meta_filepath) # Get and prepare keywords base for px file generation from Excel-sheet.
 
         # Check if there has been any changes to common meta since last production
@@ -76,10 +76,7 @@ class PXMain:
         pxpyfactory.helpers.print_filter(f"--- Start processing data product / table from orderline: {process_number+2} ---", 1)
         px_data_product = pxpyfactory.data_product.PXDataProduct(self, product_definition)
         # Check if input files have changed since last production (Any need for rebuild of px for this table?)
-        build_this_data_product = (
-            px_data_product.force_build
-            or self.production_log.data_product_change(px_data_product)
-        )
+        build_this_data_product = (px_data_product.force_build or self.production_log.data_product_change(px_data_product))
         if not build_this_data_product:
             pxpyfactory.helpers.print_filter(f"INFO: No changes in input files since last run. Skipping this data product / table.", 1)
             return

@@ -19,10 +19,13 @@ class PXDataProduct:
         self.hashed_params       = sha256(dp_row.to_string().encode()).hexdigest() # Store hashed parameters to detect changes in input files
 
         self.tableid             = '' + dp_row['TABLEID'] # Nav uses NAV_ as a prefix for table numbers
-        self.tableid_raw         = dp_row['TABLEID_RAW'] # Table ref from input/excel before shortening
-        self.table_name          = dp_row['TITLE']
-        self.subject_code        = dp_row['SUBJECT-CODE'].upper() if pxpyfactory.validation.valid_value(dp_row['SUBJECT-CODE']) else dp_row['SUBJECT-AREA'].upper()  
-        self.subject_area        = dp_row['SUBJECT-AREA'] # todo: update to show the name of the subject area
+        self.tableid_raw         = dp_row['TABLEID_RAW']            if pxpyfactory.validation.valid_value(dp_row['TABLEID_RAW'])    else self.tableid
+        self.table_name          = dp_row['TITLE']                  if pxpyfactory.validation.valid_value(dp_row['TITLE'])          else self.tableid
+        self.subject_code        = dp_row['SUBJECT-CODE'].upper()   if pxpyfactory.validation.valid_value(dp_row['SUBJECT-CODE'])   else None
+        self.subject_area        = dp_row['SUBJECT-AREA']           if pxpyfactory.validation.valid_value(dp_row['SUBJECT-AREA'])   else None
+        self.subject             = None
+        self.contents_var        = dp_row['CONTENTS']               if pxpyfactory.validation.valid_value(dp_row['CONTENTS'])       else (self.table_name + ',')
+        self.contvariable        = 'STAT_VAR' # data_list[0] # Column name for contents variable - can probably be anything..
 
         self.stub_list           = [] # pxpyfactory.helpers.prep_list_from_string(dp_row['STUB'])
         self.heading_list        = [] # pxpyfactory.helpers.prep_list_from_string(dp_row['HEADING'])
@@ -32,12 +35,10 @@ class PXDataProduct:
         self.data_units_list     = [] # pxpyfactory.helpers.prep_list_from_string(dp_row['UNITS'])
         self.timeval_list        = [] # pxpyfactory.helpers.prep_list_from_string(dp_row['TIMEVAL'])
 
-        self.contents_var        = dp_row['CONTENTS']
-        self.contvariable        = 'STAT_VAR' # data_list[0] # Column name for contents variable - can probably be anything..
-
         self.table_path          = "/".join([self.main_app.input_path, self.tableid_raw + '.csv'])
-        self.table_meta_path     = "/".join([self.main_app.input_path, self.tableid_raw + '_meta.csv'])
-        self.px_output_path      = "/".join([self.main_app.output_path, dp_row['SUBJECT-AREA'], dp_row['SUBJECT'], self.tableid + '.px'])
+        self.table_meta_path     = "/".join([self.main_app.input_path, self.tableid_raw + '_meta' + '.csv'])
+        # self.px_output_path      = "/".join([self.main_app.output_path, dp_row['SUBJECT-AREA'], dp_row['SUBJECT'], self.tableid + '.px'])
+        self.px_output_path      = None # Set later based on subject area and subject (since this can be updated based on metadata)
         self.sqa_output_path     = "/".join([self.main_app.sq_output_path, self.tableid[0], self.tableid + '.sqa'])
         self.sqs_output_path     = "/".join([self.main_app.sq_output_path, self.tableid[0], self.tableid + '.sqs'])
 
@@ -93,8 +94,10 @@ class PXDataProduct:
         # Combine meta lines and data lines into final list of lines to be written to .px file
         self.list_of_lines = meta_lines + ['DATA='] + data_lines + [';']
 
+        self.px_output_path = "/".join(x for x in [self.main_app.output_path, (keywords['SUBJECT-AREA'].get_value() or None), (self.subject or None), self.tableid + '.px'] if x is not None) # Create output path for .px file based on subject area and subject from keywords
+
         self.keywords = keywords # Store keywords in self to be able to use them later when creating Saved Query files (.sqa and .sqs)
-    
+        
         return True
 
     # _____________________________________________________________________________
@@ -252,7 +255,11 @@ class PXDataProduct:
             value = row['VALUE']
             if keyword == 'CONTACT':
                 value = pxpyfactory.keyword_contact.shape_to_px(value) # Ensure correct formatting of contact information.
- 
+            elif keyword == 'SUBJECT':
+                # This is not a PX keyword. It is used to set the subgroup of SUBJECT-AREA and output path.
+                self.subject = value # Set subject name for later use creating output path for .px file.
+                continue
+
             # Check if keyword has a scope in parentheses, for example "VALUES(COLUMN1)". If it does, extract the keyword and scope name.
             keyword_with_scope = re.fullmatch(r'([^()]+)\(([^()]+)\)', keyword)
             if keyword_with_scope:
@@ -356,7 +363,8 @@ class PXDataProduct:
         }
 
         for keyword_name, keyword_value in initial_keyword_values.items():
-            keywords[keyword_name].set_value(keyword_value, language=language_initial)
+            if keyword_value is not None and keyword_name in keywords:
+                keywords[keyword_name].set_value(keyword_value, language=language_initial)
 
         # Values for contents variable must be added first. Must also be in correct formatting
         keywords['VALUES'].set_value(self.data_list, scope_name=self.contvariable, language=language_initial) 
