@@ -99,22 +99,31 @@ def prepare_alias(common_meta_filepath):
 
 # Create the folder structure to put the PX files in.
 def update_folder_structure(data_products_df, alias_df, output_path):
-    path_list = []
-    for _, row in data_products_df.iterrows():
-        subject_area = row['SUBJECT-AREA']
-        if subject_area is None:
-            continue
-        level1_path = output_path + '/' + str(subject_area).replace('/', '')
-        if level1_path not in path_list:
-            path_list.append(level1_path)
+    # path_list = []
+    # for _, row in data_products_df.iterrows():
+    #     subject_area = row['SUBJECT-AREA']
+    #     if subject_area is None:
+    #         continue
+    #     level1_path = output_path + '/' + str(subject_area).replace('/', '')
+    #     if level1_path not in path_list:
+    #         path_list.append(level1_path)
 
-        subject = row['SUBJECT']
-        if subject is None:
-            continue
-        level2_path = level1_path + '/' + str(subject).replace('/', '')
-        if level2_path not in path_list:
-            path_list.append(level2_path)
-
+    #     subject = row['SUBJECT']
+    #     if subject is None:
+    #         continue
+    #     level2_path = level1_path + '/' + str(subject).replace('/', '')
+    #     if level2_path not in path_list:
+    #         path_list.append(level2_path)
+    files_in_path = pxpyfactory.file_io.list_files_in_path(output_path)
+    folders_in_path = []
+    for file in files_in_path:
+        folder = file.rsplit('/', 1)[0]
+        subfolders = folder.split('/')
+        for i in range(len(subfolders)):
+            folder = '/'.join(subfolders[:i+1])
+            if folder not in folders_in_path:
+                folders_in_path.append(folder)
+    path_list = [output_path + '/' + folder for folder in folders_in_path]
     languages = ['no', 'en']
     for path in path_list:
         leaf = path.rsplit('/', 1)[-1]

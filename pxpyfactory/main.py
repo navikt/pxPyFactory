@@ -36,13 +36,20 @@ class PXMain:
         for i, row in self.data_products_df.iterrows():
             self.process_data_product(i, row)
 
+        self.create_folder_structure()
         self.log_and_deploy()
 
     def mainprep(self):
         self.mainprep_ok = False
+        pxpyfactory.helpers.set_input_args() # Initialize input arguments from command line into helpers module (will be used several places later)
+
+        # Update input path if given as command line argument (overrides default in config)
+        if pxpyfactory.helpers.get_input_args('input') is not None:
+            self.input_path = pxpyfactory.helpers.get_input_args('input')
+            pxpyfactory.helpers.print_filter(f"--- Input path set from command line argument: {self.input_path} ---", 1)
+
         pxpyfactory.helpers.print_filter(f"--- Main input found: {pxpyfactory.file_io.file_exists(self.common_meta_filepath)} ---", 1)
 
-        pxpyfactory.helpers.set_input_args() # Initialize input arguments from command line into helpers module (will be used several places later)
         # Check if there has been any changes to input files since last production
         if pxpyfactory.helpers.get_input_args('clean'):
             pxpyfactory.helpers.print_filter(f"--- Clean (delete all content in output folder before creating new structure) ---", 0)
@@ -58,16 +65,6 @@ class PXMain:
 
         self.data_products_df = pxpyfactory.main_praparation.prepare_data_products(self.common_meta_filepath, self.input_path) # Get and prepare data products for px file generation from Excel-sheet.
         self.keywords_base = pxpyfactory.main_praparation.prepare_keywords_base(self.common_meta_filepath) # Get and prepare keywords base for px file generation from Excel-sheet.
-
-        # Check if there has been any changes to common meta since last production
-        if self.production_log.common_meta_change() or pxpyfactory.helpers.get_input_args('build') == 'all':
-            pxpyfactory.helpers.print_filter(f"--- Content in common meta has changed since last run (rebuild aliases and folders) ---", 1)
-            self.alias_df = pxpyfactory.main_praparation.prepare_alias(self.common_meta_filepath) # Get and prepare alias
-            pxpyfactory.main_praparation.update_folder_structure(self.data_products_df, self.alias_df, self.output_path) # Create folder structure from data_products dataframe
-            self.production_log.alias_built = True
-            self.deployment_needed = True
-        else:
-            pxpyfactory.helpers.print_filter(f"--- No changes in common meta since last run (skip rebuild of aliases and folders) ---", 1)
 
         self.mainprep_ok = True
 
@@ -104,6 +101,16 @@ class PXMain:
         pxpyfactory.helpers.print_filter("Saved Query files generated", 1)
         self.sq_file_pairs_written += 1
 
+    def create_folder_structure(self):
+        # Check if there has been any changes to common meta since last production
+        if self.production_log.common_meta_change() or pxpyfactory.helpers.get_input_args('build') == 'all':
+            pxpyfactory.helpers.print_filter(f"--- Content in common meta has changed since last run (rebuild aliases and folders) ---", 1)
+            self.alias_df = pxpyfactory.main_praparation.prepare_alias(self.common_meta_filepath) # Get and prepare alias
+            pxpyfactory.main_praparation.update_folder_structure(self.data_products_df, self.alias_df, self.output_path) # Create folder structure from data_products dataframe
+            self.production_log.alias_built = True
+            self.deployment_needed = True
+        else:
+            pxpyfactory.helpers.print_filter(f"--- No changes in common meta since last run (skip rebuild of aliases and folders) ---", 1)
 
     def log_and_deploy(self):
         # After processing all data products, print summary and trigger deployment if not in test mode
