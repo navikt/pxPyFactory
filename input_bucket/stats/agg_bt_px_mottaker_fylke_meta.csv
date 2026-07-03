@@ -16,9 +16,7 @@ CS;TIMEVAL;;AAR_KVARTAL
 
 
 -- PX keyword setting
--- Keywords present in the px-standard can be set and updated here.
--- Translations for each parameter can be set by filling out LANGUAGE column. If language is not set here it will be the fallback language for translations to languages not set.
--- SUBJECT-CODE, SUBJECT-AREA, SUBJECT, TITLE and CONTENTS should be set here if it is not set in common metadata.
+-- Keywords present in the px-standard can be set and updated here. Translations for each parameter are also set here.
 -- If a column is refered (for example in the scope of a keyword), use the column name from the table.
 -- The CONTACT keyword is set with parts separated by #. They are appended to default (can be set in common_meta), and several can be added here.
 PX;SUBJECT-CODE;;be
