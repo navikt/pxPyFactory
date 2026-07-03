@@ -1,11 +1,10 @@
 -- This file contains updates and additions to the data table.
 -- It can modify most parameters, but some, like TABLEID and MATRIX can not be modified here.
--- All types different from PX, CR and SQ are ignored.
+-- All types different from CS, PX, CR and SQ are ignored.
 -- Keywords not present in meta-default sheet/tab in common_meta.xlsx are ignored.
 
 
-type;keyword;language;value
-
+TYPE;KEYWORD;LANGUAGE;VALUE
 
 -- Column set - to use as either STUB, HEADING or DATA
 -- Languages are ignored here.
@@ -15,26 +14,21 @@ CS;HEADING;;AAR_KVARTAL
 CS;DATA;;antall#0#unit_antall, prosent#2#unit_prosent
 CS;TIMEVAL;;AAR_KVARTAL
 
--- CR, Column Rename, is used to show intuitive and translated names on columns.
-CR;fylke;no;fylke
-CR;fylke;en;county
-CR;AAR_KVARTAL;no;år-kvartal
-CR;AAR_KVARTAL;en;year_quarter
-CR;Antall;no;antall
-CR;Antall;en;amount
-CR;prosenT;no;prosent
-CR;prosenT;en;percent
-CR;stat_var;no;statistikkvariabel
-CR;stat_var;en;statistical variable
 
-CR;unit_antall;no;personer
-CR;unit_antall;en;people
-CR;unit_prosent;no;del av alle mottakere
-CR;unit_prosent;en;part of all
-
-
+-- PX keyword setting
+-- Keywords present in the px-standard can be set and updated here.
+-- Translations for each parameter can be set by filling out LANGUAGE column. If language is not set here it will be the fallback language for translations to languages not set.
+-- SUBJECT-CODE, SUBJECT-AREA, SUBJECT, TITLE and CONTENTS should be set here if it is not set in common metadata.
+-- If a column is refered (for example in the scope of a keyword), use the column name from the table.
+-- The CONTACT keyword is set with parts separated by #. They are appended to default (can be set in common_meta), and several can be added here.
+PX;SUBJECT-CODE;;be
+PX;SUBJECT-AREA;no;familie
+PX;SUBJECT;no;barnetrygd
+PX;TITLE;no;Mottakere av barnetrygd distribuert på fylke
 PX;TITLE;en;Recevers of child care distributed on county
+PX;CONTENTS;no;Mottakere av barnetrygd,
 PX;CONTENTS;en;Child care receivers,
+PX;CONTACT;;Team familie#Statistikkseksjonen#+47 12345678#team_familie@nav.no
 PX;LAST-UPDATED;;20251111 11:11
 PX;INFO;;Ingen ekstra informasjon fra familieteamet.
 PX;NOTE;no;[Link til annen statistikk om barnetrgd](https://www.nav.no/no/nav-og-samfunn/statistikk/familie-statistikk/barnetrygd)
@@ -44,26 +38,37 @@ PX;NOTEX;no;
 PX;NOTEX;en;This table is made to show current functionality for some parameters in px file format.
 PX;REFPERIOD(antall);;2025
 
--- CONTACT parts must be separated with #. They are appended to default (can be set in common_meta), and several can be added here.
-PX;CONTACT;;Team familie#Statistikkseksjonen#+47 12345678#team_familie@nav.no
+
+-- CR, Column Rename, is used to show intuitive and translated names on columns.
+-- Column names from the table can be renamed for different languages here.
+CR;FYLKE;no;fylke
+CR;FYLKE;en;county
+CR;AAR_KVARTAL;no;år-kvartal
+CR;AAR_KVARTAL;en;year_quarter
+CR;ANTALL;no;antall
+CR;ANTALL;en;amount
+CR;PROSENT;no;prosent
+CR;PROSENT;en;percent
+CR;STAT_VAR;no;statistikkvariabel
+CR;STAT_VAR;en;statistical variable
+
+CR;unit_antall;no;personer
+CR;unit_antall;en;people
+CR;unit_prosent;no;del av alle mottakere
+CR;unit_prosent;en;part of all
 
 
 -- SQ, Saved Query, is used to set a standard view of the table when it is opened.
 -- Languages are ignored here.
 -- The number represents the amount of values selected on each column.
 -- A negative number selects values from the other end of the list of values.
-SQ;fylke;;14
-SQ;aar_kvartal;;-4
-SQ;stat_var;;2
+SQ;FYLKE;;14
+SQ;AAR_KVARTAL;;-4
+SQ;STAT_VAR;;2
 
 
 
 -- STUFF BELLOW THIS LINE ARE ONLY FOR TESTING --
-
--- PX;CONTACT-HEADER;;Team familie
--- PX;CONTACT-BODY;;Statistikkseksjonen
--- PX;CONTACT-PHONE;;+47 12345678
--- PX;CONTACT-EMAIL;;team_familie@nav.no
 
 -- dette skal funke
 -- PX;VALUENOTE("Fylke","03 Oslo");;Oslo er hovedstaden i Norge
