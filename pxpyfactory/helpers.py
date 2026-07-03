@@ -5,21 +5,25 @@ input_args = {}
 
 
 # Parse command line arguments into global input_args dictionary.
-def set_input_args():
+def set_input_args(input_args_dict=None):
     global input_args
-    sys_argv = sys.argv[1:] if len(sys.argv) > 1 else []
-    input_args = {}
-    for arg in sys_argv:
-        if '=' in arg:
-            key, value = arg.split('=', 1)  # Split only on first '='
-            # Auto-convert common types
-            if value.lower() in ('true', 'false'):
-                value = value.lower() == 'true'
-            elif value.isdigit():
-                value = int(value)
-            input_args[key] = value
-        else:
-            input_args[arg] = True  # Flag-style argument
+    if input_args_dict is not None:
+        input_args = input_args_dict
+    else:
+        sys_argv = sys.argv[1:] if len(sys.argv) > 1 else []
+        input_args = {}
+        for arg in sys_argv:
+            if '=' in arg:
+                key, value = arg.split('=', 1)  # Split only on first '='
+                # Auto-convert common types
+                if value.lower() in ('true', 'false'):
+                    value = value.lower() == 'true'
+                elif value.isdigit():
+                    value = int(value)
+                input_args[key] = value
+            else:
+                input_args[arg] = True  # Flag-style argument
+
     print_filter(f"Input arguments: {input_args}", 0)
 
 

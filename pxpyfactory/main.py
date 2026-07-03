@@ -28,9 +28,9 @@ class PXMain:
         self.deployment_needed: bool = False
 
 
-    def run(self):
+    def run(self, input_args_dict=None):
 
-        self.mainprep()
+        self.mainprep(input_args_dict)
         if not self.mainprep_ok:
             return
         ### Start processing each data product:
@@ -40,9 +40,9 @@ class PXMain:
         self.create_folder_structure()
         self.log_and_deploy()
 
-    def mainprep(self):
+    def mainprep(self, input_args_dict=None):
         self.mainprep_ok = False
-        pxpyfactory.helpers.set_input_args() # Initialize input arguments from command line into helpers module (will be used several places later)
+        pxpyfactory.helpers.set_input_args(input_args_dict) # Initialize input arguments from command line into helpers module (will be used several places later)
 
         # Update input path if given as command line argument (overrides default in config)
         if pxpyfactory.helpers.get_input_args('input') is not None:
