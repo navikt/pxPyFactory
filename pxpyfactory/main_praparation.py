@@ -17,7 +17,7 @@ def prepare_data_products(common_meta_filepath, input_path):
                 pxpyfactory.helpers.print_filter("Found TABLEID with value '*'. All files in input-folder will be added.", 1)
                 data_products = data_products[data_products['TABLEID'] != '*']
                 source_arg = 'folder'
-            data_products = data_products[pxpyfactory.helpers.validvalue(data_products['TABLEID']) & (data_products['BUILD'].astype(str).str.strip().str.lower() == 'x')]
+            data_products = data_products[data_products['TABLEID'].apply(pxpyfactory.validation.valid_value) & (data_products['BUILD'].astype(str).str.strip().str.lower() == 'x')]
         else:
             data_products = pd.DataFrame()
         # Remove duplicated data products in Excel sheet
@@ -52,13 +52,17 @@ def prepare_data_products(common_meta_filepath, input_path):
         # Implementation for adding all data product files in the folder
         files_in_folder = pxpyfactory.file_io.list_files_in_path(input_path)
         new_row = dict.fromkeys(data_products.columns, None)
+        existing_tableids = {str(tableid).lower() for tableid in data_products['TABLEID'].dropna().values}
         for file in files_in_folder:
             # split file str on '.'
             file_parts = file.rsplit('.', 1)
-            if file_parts[1] in ['csv']: # , 'parquet']: # Only consider csv and parquet files as data products
-                if (file_parts[0].endswith('_meta') == False) and (file_parts[0] not in data_products['TABLEID'].values):
+            if len(file_parts) != 2:
+                continue
+            if file_parts[1].lower() in ['csv']: # , 'parquet']: # Only consider csv and parquet files as data products
+                if (file_parts[0].lower().endswith('_meta') == False) and (file_parts[0].lower() not in existing_tableids):
                     new_row['TABLEID'] = file_parts[0]
                     data_products.loc[len(data_products)] = new_row
+                    existing_tableids.add(file_parts[0].lower())
 
     # Filter based on command line arguments
     force_build_arg = pxpyfactory.helpers.get_input_args('build')
@@ -83,22 +87,45 @@ def prepare_data_products(common_meta_filepath, input_path):
 
 
 # Prepare alias folder names from Excel sheets - common for all data products.
-def prepare_alias(common_meta_filepath):
+def prepare_alias(common_meta_filepath, language_preference_order):
     alias = pxpyfactory.file_io.file_read(common_meta_filepath, sheet_name='folder-alias')
     pxpyfactory.helpers.print_filter('Alias table:', 4)
     pxpyfactory.helpers.print_filter(alias, 4)
-    alias = alias[['CODE', 'NO', 'EN']]
-    alias['NO'] = alias['NO'].where(alias['NO'].apply(pxpyfactory.validation.valid_value), alias['EN'])
-    alias['EN'] = alias['EN'].where(alias['EN'].apply(pxpyfactory.validation.valid_value), alias['NO'])
-    alias = alias[alias['CODE'].apply(pxpyfactory.validation.valid_value) & alias['NO'].apply(pxpyfactory.validation.valid_value)]
 
-    duplicates_mask = alias.duplicated(subset=['CODE'], keep='first')
-    alias = alias[~duplicates_mask].copy()
+    if not {'CODE'}.issubset(alias.columns):
+        pxpyfactory.helpers.print_filter("Missing or unvalid file for spesific metadata.", 4)
+        return pd.DataFrame()
+    valid_columns = ['CODE']
+    for column in alias.columns:
+        # append column name if it is a two-letter language code (e.g. 'NO', 'EN') to valid_columns list
+        if len(column) == 2 and column.isalpha():
+            valid_columns.append(column)
+    alias = alias[valid_columns]
+    lang_cols = [col for col in alias.columns if col != 'CODE']
+
+    # Remove rows with no valid CODE or no valid value in any language column
+    has_valid_lang = alias[lang_cols].apply(lambda row: row.apply(pxpyfactory.validation.valid_value).any(), axis=1)
+    alias = alias[alias['CODE'].apply(pxpyfactory.validation.valid_value) & has_valid_lang].copy()
+
+    # Merge rows with same CODE: use first valid value per language column
+    def first_valid(series):
+        valid_vals = series[series.apply(pxpyfactory.validation.valid_value)]
+        return valid_vals.iloc[0] if not valid_vals.empty else None
+
+    alias = alias.groupby('CODE', sort=False).agg({col: first_valid for col in lang_cols}).reset_index()
+
+    # Fill missing language values: try each language in preference order, then fall back to CODE
+    available_langs = [lang.upper() for lang in language_preference_order if lang.upper() in alias.columns]
+    for language_col in available_langs:
+        for fallback_lang in available_langs:
+            alias[language_col] = alias[language_col].where(alias[language_col].apply(pxpyfactory.validation.valid_value), alias[fallback_lang])
+        alias[language_col] = alias[language_col].where(alias[language_col].apply(pxpyfactory.validation.valid_value), alias['CODE'])
+
     return alias
 
 
 # Create the folder structure to put the PX files in.
-def update_folder_structure(data_products_df, alias_df, output_path):
+def update_folder_structure(data_products_df, alias_df, output_path, language_preference_order):
     # path_list = []
     # for _, row in data_products_df.iterrows():
     #     subject_area = row['SUBJECT-AREA']
@@ -124,13 +151,14 @@ def update_folder_structure(data_products_df, alias_df, output_path):
             if folder not in folders_in_path:
                 folders_in_path.append(folder)
     path_list = [output_path + '/' + folder for folder in folders_in_path]
-    languages = ['no', 'en']
+    languages = [language.lower() for language in language_preference_order]
     for path in path_list:
         leaf = path.rsplit('/', 1)[-1]
         for language in languages:
             alias_value = leaf
-            if leaf in alias_df['CODE'].values:
-                alias_value = alias_df.loc[alias_df['CODE'] == leaf, language.upper()].iloc[0]
+            language_col = language.upper()
+            if (leaf in alias_df['CODE'].values) and (language_col in alias_df.columns):
+                alias_value = alias_df.loc[alias_df['CODE'] == leaf, language_col].iloc[0]
             file_path = path + '/' + 'alias_' + language + '.txt'
             pxpyfactory.file_io.file_write(file_path, alias_value)
 

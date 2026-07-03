@@ -2,9 +2,7 @@
 class MultilingualColumnValue:
 
     @staticmethod
-    def prepare_language_columns(table_data, keyword_language='no', keyword_languages=None):
-        language_preference_order = [keyword_language] + [language for language in (keyword_languages or []) if language != keyword_language]
-        
+    def prepare_language_columns(table_data, language_preference_order=['no']):
         language_columns_mapping = {} # Mapping of column_name -> base_value -> language -> translation, e.g., {'FYLKE': {'Oslo': {'en': 'Oslo County', 'no': 'Oslo'}}}
         base_columns = {}
         columns_to_drop = set()

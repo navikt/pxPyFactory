@@ -17,6 +17,7 @@ class PXMain:
 
         self.data_products_df: pd.DataFrame = pd.DataFrame()
         self.keywords_base: dict = {}
+        self.language_preference_order: list = []
         self.production_log: pxpyfactory.log.PXLog = None
         self.alias_df: pd.DataFrame = pd.DataFrame()
         self.mainprep_ok: bool = False
@@ -66,6 +67,10 @@ class PXMain:
         self.data_products_df = pxpyfactory.main_praparation.prepare_data_products(self.common_meta_filepath, self.input_path) # Get and prepare data products for px file generation from Excel-sheet.
         self.keywords_base = pxpyfactory.main_praparation.prepare_keywords_base(self.common_meta_filepath) # Get and prepare keywords base for px file generation from Excel-sheet.
 
+        keyword_language = self.keywords_base['LANGUAGE'].get_value() if self.keywords_base['LANGUAGE'] is not None else 'no'
+        keyword_languages = self.keywords_base['LANGUAGES'].get_value() if self.keywords_base['LANGUAGES'] is not None else []
+        self.language_preference_order = [keyword_language] + [language for language in (keyword_languages or []) if language != keyword_language]
+
         self.mainprep_ok = True
 
 
@@ -105,8 +110,8 @@ class PXMain:
         # Check if there has been any changes to common meta since last production
         if self.production_log.common_meta_change() or pxpyfactory.helpers.get_input_args('build') == 'all':
             pxpyfactory.helpers.print_filter(f"--- Content in common meta has changed since last run (rebuild aliases and folders) ---", 1)
-            self.alias_df = pxpyfactory.main_praparation.prepare_alias(self.common_meta_filepath) # Get and prepare alias
-            pxpyfactory.main_praparation.update_folder_structure(self.data_products_df, self.alias_df, self.output_path) # Create folder structure from data_products dataframe
+            self.alias_df = pxpyfactory.main_praparation.prepare_alias(self.common_meta_filepath, self.language_preference_order) # Fetch alias table from Excel-sheet
+            pxpyfactory.main_praparation.update_folder_structure(self.data_products_df, self.alias_df, self.output_path, self.language_preference_order) # Create folder structure from data_products dataframe
             self.production_log.alias_built = True
             self.deployment_needed = True
         else:

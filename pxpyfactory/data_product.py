@@ -65,7 +65,7 @@ class PXDataProduct:
         
         table_data = pxpyfactory.file_io.file_read(self.table_path) # Fetch data table from .parquet or .csv file
         # Prepare language-specific columns and create mapping of translations for values in different languages. OBS: Use language prefrence from general settings.
-        table_data, self.language_values_dict = pxpyfactory.multilingual_column_value.MultilingualColumnValue.prepare_language_columns(table_data, keyword_language=self.main_app.keywords_base['LANGUAGE'].get_value(), keyword_languages=self.main_app.keywords_base['LANGUAGES'].get_value())
+        table_data, self.language_values_dict = pxpyfactory.multilingual_column_value.MultilingualColumnValue.prepare_language_columns(table_data, language_preference_order=self.main_app.language_preference_order)
 
         table_meta = pxpyfactory.file_io.file_read(self.table_meta_path) # Read spesific metadata from .csv-file if it exists
         table_meta_cs, table_meta_px, table_meta_cr, self.table_meta_sq = self._extract_table_metadata(table_meta) # Extract spesific metadata from table_meta
@@ -327,15 +327,26 @@ class PXDataProduct:
             pxpyfactory.helpers.print_filter("Missing or unvalid file for spesific metadata.", 2)
             table_meta = table_meta.reindex(columns=table_meta.columns.tolist() + ['TYPE', 'KEYWORD', 'VALUE'], fill_value=None) # add missing columns to avoid faults
 
-        # Add LANGUAGE column if it doesn't exist
         if 'LANGUAGE' not in table_meta.columns:
             table_meta['LANGUAGE'] = None
-        
-        # Convert to string and handle NaN values before applying upper()
-        table_meta['TYPE']      = table_meta['TYPE'].astype(str).str.upper()     # uppercase
-        table_meta['KEYWORD']   = table_meta['KEYWORD'].astype(str).str.upper()  # uppercase
-        table_meta['LANGUAGE']  = table_meta['LANGUAGE'].astype(str).str.lower() # lowercase
-        
+
+        def _normalize_meta_text(series):
+            return (
+                series
+                .fillna('')
+                .astype(str)
+                .str.strip()
+                .str.replace(r'^"(.*)"$', r'\1', regex=True)
+            )
+
+        table_meta['TYPE'] = _normalize_meta_text(table_meta['TYPE']).str.upper()
+        table_meta['KEYWORD'] = _normalize_meta_text(table_meta['KEYWORD']).str.upper()
+        table_meta['LANGUAGE'] = _normalize_meta_text(table_meta['LANGUAGE']).str.lower()
+        table_meta.loc[table_meta['LANGUAGE'] == '', 'LANGUAGE'] = None
+        table_meta['VALUE'] = _normalize_meta_text(table_meta['VALUE'])
+
+        table_meta = table_meta[(table_meta['TYPE'] != '') & (table_meta['KEYWORD'] != '')]
+
         table_meta_cs      = table_meta[table_meta['TYPE'] == 'CS'][['KEYWORD', 'VALUE']]      # create df with only cs parameters
         table_meta_px      = table_meta[table_meta['TYPE'] == 'PX'][['KEYWORD', 'LANGUAGE', 'VALUE']]      # create df with only px parameters
         table_meta_cr      = table_meta[table_meta['TYPE'] == 'CR'][['KEYWORD', 'LANGUAGE', 'VALUE']]      # create df with only cr parameters
